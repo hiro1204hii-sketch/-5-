@@ -1,0 +1,69 @@
+{
+  "expo": {
+    "name": "育てる営業手帳",
+    "slug": "sodateru-eigyo-techo",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#f5ede0"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.yourcompany.sodaterueigyotecho",
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "商談を録音するためにマイクへのアクセスが必要です",
+        "NSSpeechRecognitionUsageDescription": "商談の音声をテキストに変換するために音声認識が必要です"
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#f5ede0"
+      },
+      "package": "com.yourcompany.sodaterueigyotecho",
+      "permissions": [
+        "RECORD_AUDIO",
+        "INTERNET"
+      ]
+    },
+    "web": {
+      "bundler": "metro"
+    },
+    "scheme": "sodateru-eigyo-techo",
+    "plugins": [
+      "expo-router",
+      [
+        "expo-av",
+        {
+          "microphonePermission": "商談を録音するためにマイクへのアクセスが必要です"
+        }
+      ],
+      [
+        "react-native-purchases",
+        {
+          "apiKey": "YOUR_REVENUECAT_API_KEY"
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "deploymentTarget": "15.1"
+          },
+          "android": {
+            "compileSdkVersion": 35,
+            "targetSdkVersion": 35,
+            "minSdkVersion": 24
+          }
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
