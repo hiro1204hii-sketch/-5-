@@ -1,0 +1,877 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>育てる営業手帳</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@400;700&family=Noto+Sans+JP:wght@300;400;500&display=swap');
+
+    :root {
+      --cream: #faf6f0;
+      --paper: #f5ede0;
+      --warm-brown: #8b5e3c;
+      --dark-brown: #4a2c0a;
+      --light-brown: #c4956a;
+      --ink: #2c1a0e;
+      --red-hot: #c0392b;
+      --orange-warm: #e67e22;
+      --blue-cold: #2980b9;
+      --line-color: #d4b896;
+      --shadow: rgba(74, 44, 10, 0.15);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #e8ddd0;
+      font-family: 'Noto Sans JP', sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 20px;
+      background-image:
+        radial-gradient(ellipse at 20% 20%, rgba(196, 149, 106, 0.2) 0%, transparent 50%),
+        radial-gradient(ellipse at 80% 80%, rgba(139, 94, 60, 0.15) 0%, transparent 50%);
+    }
+
+    .notebook {
+      width: 100%;
+      max-width: 820px;
+      background: var(--paper);
+      border-radius: 4px 12px 12px 4px;
+      box-shadow:
+        -8px 0 0 #c4956a,
+        -10px 0 0 #a87850,
+        -12px 0 0 #8b6040,
+        4px 4px 20px var(--shadow),
+        8px 8px 40px rgba(74,44,10,0.1);
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* Spiral binding holes */
+    .binding {
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 32px;
+      background: linear-gradient(to right, #a87850, #c4956a);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: space-evenly;
+      padding: 40px 0;
+      z-index: 10;
+    }
+    .hole {
+      width: 18px;
+      height: 18px;
+      background: #e8ddd0;
+      border-radius: 50%;
+      box-shadow: inset 0 2px 4px rgba(0,0,0,0.3);
+    }
+
+    .content {
+      margin-left: 32px;
+      padding: 0;
+      background: repeating-linear-gradient(
+        to bottom,
+        transparent,
+        transparent 39px,
+        var(--line-color) 39px,
+        var(--line-color) 40px
+      );
+      background-color: var(--cream);
+    }
+
+    /* Header */
+    .header {
+      background: linear-gradient(135deg, var(--dark-brown) 0%, var(--warm-brown) 100%);
+      color: var(--cream);
+      padding: 24px 32px 20px;
+      position: relative;
+      overflow: hidden;
+    }
+    .header::after {
+      content: '';
+      position: absolute;
+      bottom: -1px;
+      left: 0;
+      right: 0;
+      height: 4px;
+      background: var(--light-brown);
+    }
+    .header-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    .app-title {
+      font-family: 'Noto Serif JP', serif;
+      font-size: 26px;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-shadow: 1px 1px 3px rgba(0,0,0,0.3);
+    }
+    .app-subtitle {
+      font-size: 11px;
+      opacity: 0.75;
+      letter-spacing: 0.1em;
+      margin-top: 2px;
+    }
+    .date-display {
+      font-size: 13px;
+      opacity: 0.85;
+      text-align: right;
+    }
+
+    /* API Key section */
+    .api-section {
+      padding: 20px 32px;
+      border-bottom: 1px solid var(--line-color);
+      background: rgba(196, 149, 106, 0.08);
+    }
+    .api-label {
+      font-size: 11px;
+      color: var(--warm-brown);
+      font-weight: 500;
+      letter-spacing: 0.08em;
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .api-label::before { content: '🔑'; font-size: 12px; }
+    .api-input-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    .api-input {
+      flex: 1;
+      padding: 8px 12px;
+      border: 1px solid var(--line-color);
+      border-radius: 6px;
+      background: var(--cream);
+      font-size: 13px;
+      color: var(--ink);
+      font-family: 'Noto Sans JP', sans-serif;
+    }
+    .api-input:focus { outline: none; border-color: var(--warm-brown); }
+    .api-save-btn {
+      padding: 8px 16px;
+      background: var(--warm-brown);
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-size: 12px;
+      cursor: pointer;
+      font-family: 'Noto Sans JP', sans-serif;
+      white-space: nowrap;
+    }
+    .api-save-btn:hover { background: var(--dark-brown); }
+    .api-status {
+      font-size: 11px;
+      margin-top: 4px;
+      color: #27ae60;
+      display: none;
+    }
+    .api-status.visible { display: block; }
+
+    /* Recording section */
+    .record-section {
+      padding: 32px 32px 24px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .record-instruction {
+      font-size: 13px;
+      color: var(--warm-brown);
+      letter-spacing: 0.05em;
+      font-style: italic;
+    }
+
+    .record-btn-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .record-btn {
+      width: 100px;
+      height: 100px;
+      border-radius: 50%;
+      border: 4px solid var(--warm-brown);
+      background: var(--cream);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s ease;
+      box-shadow: 0 4px 15px var(--shadow);
+      position: relative;
+      overflow: hidden;
+    }
+    .record-btn:hover {
+      transform: scale(1.05);
+      box-shadow: 0 6px 20px var(--shadow);
+    }
+    .record-btn.recording {
+      border-color: var(--red-hot);
+      animation: pulse 1.5s infinite;
+    }
+    .record-btn.recording .mic-icon { color: var(--red-hot); }
+    @keyframes pulse {
+      0%, 100% { box-shadow: 0 4px 15px rgba(192,57,43,0.3); }
+      50% { box-shadow: 0 4px 30px rgba(192,57,43,0.6); }
+    }
+    .mic-icon {
+      font-size: 40px;
+      color: var(--warm-brown);
+      user-select: none;
+    }
+    .record-label {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--ink);
+      letter-spacing: 0.05em;
+    }
+
+    /* Live transcript */
+    .live-area {
+      width: 100%;
+      background: rgba(255,255,255,0.5);
+      border: 1px dashed var(--line-color);
+      border-radius: 8px;
+      padding: 12px 16px;
+      min-height: 60px;
+      font-size: 13px;
+      color: var(--ink);
+      line-height: 1.8;
+      font-style: italic;
+      display: none;
+    }
+    .live-area.active { display: block; }
+
+    /* Timer */
+    .timer {
+      font-size: 24px;
+      font-family: 'Noto Serif JP', serif;
+      color: var(--red-hot);
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      display: none;
+    }
+    .timer.visible { display: block; }
+
+    /* Status message */
+    .status-msg {
+      font-size: 12px;
+      color: var(--warm-brown);
+      text-align: center;
+      min-height: 18px;
+    }
+
+    /* Divider */
+    .divider {
+      margin: 0 32px;
+      border: none;
+      border-top: 2px dashed var(--line-color);
+    }
+
+    /* Results */
+    .results {
+      padding: 28px 32px 40px;
+      display: none;
+      flex-direction: column;
+      gap: 28px;
+    }
+    .results.visible { display: flex; }
+
+    .result-card {
+      background: rgba(255,255,255,0.6);
+      border-radius: 8px;
+      border: 1px solid var(--line-color);
+      overflow: hidden;
+      box-shadow: 0 2px 8px var(--shadow);
+    }
+    .card-header {
+      padding: 12px 20px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      border-bottom: 1px solid var(--line-color);
+    }
+    .card-icon { font-size: 18px; }
+    .card-title {
+      font-family: 'Noto Serif JP', serif;
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--dark-brown);
+    }
+    .card-body {
+      padding: 16px 20px;
+      font-size: 13px;
+      color: var(--ink);
+      line-height: 1.9;
+      white-space: pre-wrap;
+    }
+
+    /* Temperature badge */
+    .temp-badge-wrap {
+      padding: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .temp-badge {
+      font-family: 'Noto Serif JP', serif;
+      font-size: 36px;
+      font-weight: 700;
+      padding: 12px 40px;
+      border-radius: 50px;
+      letter-spacing: 0.2em;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+    .temp-badge.HOT {
+      background: linear-gradient(135deg, #e74c3c, #c0392b);
+      color: white;
+    }
+    .temp-badge.WARM {
+      background: linear-gradient(135deg, #f39c12, #e67e22);
+      color: white;
+    }
+    .temp-badge.COLD {
+      background: linear-gradient(135deg, #3498db, #2980b9);
+      color: white;
+    }
+    .temp-reason {
+      font-size: 12px;
+      color: var(--warm-brown);
+      text-align: center;
+      font-style: italic;
+      max-width: 400px;
+    }
+
+    /* Loading */
+    .loading {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+      padding: 40px 32px;
+    }
+    .loading.visible { display: flex; }
+    .spinner {
+      width: 48px;
+      height: 48px;
+      border: 4px solid var(--line-color);
+      border-top-color: var(--warm-brown);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loading-text {
+      font-size: 14px;
+      color: var(--warm-brown);
+      font-style: italic;
+      text-align: center;
+    }
+
+    /* Reset button */
+    .reset-btn {
+      margin: 0 32px 32px;
+      display: none;
+      padding: 12px;
+      background: transparent;
+      border: 2px solid var(--light-brown);
+      border-radius: 8px;
+      color: var(--warm-brown);
+      font-size: 13px;
+      font-family: 'Noto Sans JP', sans-serif;
+      cursor: pointer;
+      letter-spacing: 0.05em;
+      transition: all 0.2s;
+    }
+    .reset-btn:hover { background: var(--light-brown); color: white; }
+    .reset-btn.visible { display: block; }
+
+    /* History */
+    .history-section {
+      padding: 0 32px 32px;
+      display: none;
+    }
+    .history-section.visible { display: block; }
+    .history-title {
+      font-family: 'Noto Serif JP', serif;
+      font-size: 13px;
+      color: var(--warm-brown);
+      letter-spacing: 0.1em;
+      margin-bottom: 12px;
+      padding-bottom: 6px;
+      border-bottom: 1px solid var(--line-color);
+    }
+    .history-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .history-item {
+      background: rgba(255,255,255,0.4);
+      border: 1px solid var(--line-color);
+      border-radius: 6px;
+      padding: 10px 14px;
+      cursor: pointer;
+      transition: background 0.15s;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .history-item:hover { background: rgba(255,255,255,0.7); }
+    .history-date { font-size: 11px; color: var(--warm-brown); white-space: nowrap; }
+    .history-preview { font-size: 12px; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+    .history-temp {
+      font-size: 10px;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 20px;
+      color: white;
+      white-space: nowrap;
+    }
+    .history-temp.HOT { background: #c0392b; }
+    .history-temp.WARM { background: #e67e22; }
+    .history-temp.COLD { background: #2980b9; }
+
+    /* Responsive for iPad */
+    @media (max-width: 900px) {
+      body { padding: 12px; }
+      .app-title { font-size: 22px; }
+    }
+    @media (max-width: 600px) {
+      .record-section { padding: 24px 20px 20px; }
+      .results { padding: 20px 20px 32px; }
+      .divider { margin: 0 20px; }
+      .api-section { padding: 16px 20px; }
+      .reset-btn { margin: 0 20px 24px; }
+      .history-section { padding: 0 20px 24px; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="notebook">
+  <!-- Binding spine -->
+  <div class="binding">
+    <div class="hole"></div><div class="hole"></div><div class="hole"></div>
+    <div class="hole"></div><div class="hole"></div><div class="hole"></div>
+    <div class="hole"></div><div class="hole"></div><div class="hole"></div>
+  </div>
+
+  <!-- Header -->
+  <div class="content">
+    <div class="header">
+      <div class="header-top">
+        <div>
+          <div class="app-title">📓 育てる営業手帳</div>
+          <div class="app-subtitle">AI-Powered Sales Companion</div>
+        </div>
+        <div class="date-display" id="dateDisplay"></div>
+      </div>
+    </div>
+
+    <!-- API Key -->
+    <div class="api-section">
+      <div class="api-label">Anthropic API キー</div>
+      <div class="api-input-row">
+        <input type="password" class="api-input" id="apiKeyInput" placeholder="sk-ant-..." />
+        <button class="api-save-btn" onclick="saveApiKey()">保存</button>
+      </div>
+      <div class="api-status" id="apiStatus">✓ APIキーを保存しました</div>
+    </div>
+
+    <!-- Recording Section -->
+    <div class="record-section">
+      <div class="record-instruction">商談が始まったら録音ボタンを押してください</div>
+
+      <div class="record-btn-wrap">
+        <button class="record-btn" id="recordBtn" onclick="toggleRecording()">
+          <span class="mic-icon" id="micIcon">🎙️</span>
+        </button>
+        <div class="timer" id="timer">00:00</div>
+        <div class="record-label" id="recordLabel">録音開始</div>
+      </div>
+
+      <div class="live-area" id="liveArea">
+        <span id="liveText">🎤 音声を認識中...</span>
+      </div>
+
+      <div class="status-msg" id="statusMsg"></div>
+    </div>
+
+    <hr class="divider">
+
+    <!-- Loading -->
+    <div class="loading" id="loading">
+      <div class="spinner"></div>
+      <div class="loading-text">AIが分析中です...<br>少々お待ちください ✍️</div>
+    </div>
+
+    <!-- Results -->
+    <div class="results" id="results">
+      <!-- Minutes -->
+      <div class="result-card">
+        <div class="card-header">
+          <span class="card-icon">📝</span>
+          <span class="card-title">議事録</span>
+        </div>
+        <div class="card-body" id="minutesBody"></div>
+      </div>
+
+      <!-- Actions -->
+      <div class="result-card">
+        <div class="card-header">
+          <span class="card-icon">✅</span>
+          <span class="card-title">次のアクション</span>
+        </div>
+        <div class="card-body" id="actionsBody"></div>
+      </div>
+
+      <!-- Temperature -->
+      <div class="result-card">
+        <div class="card-header">
+          <span class="card-icon">🌡️</span>
+          <span class="card-title">お客さんの温度感</span>
+        </div>
+        <div class="temp-badge-wrap">
+          <div class="temp-badge" id="tempBadge">--</div>
+          <div class="temp-reason" id="tempReason"></div>
+        </div>
+      </div>
+    </div>
+
+    <button class="reset-btn" id="resetBtn" onclick="resetAll()">🔄 新しい商談を始める</button>
+
+    <!-- History -->
+    <div class="history-section" id="historySection">
+      <div class="history-title">📚 過去の商談記録</div>
+      <div class="history-list" id="historyList"></div>
+    </div>
+
+  </div><!-- .content -->
+</div><!-- .notebook -->
+
+<script>
+  // ---- State ----
+  let recognition = null;
+  let isRecording = false;
+  let timerInterval = null;
+  let seconds = 0;
+  let fullTranscript = '';
+  let mediaRecorder = null;
+  let speechSupported = false;
+
+  // ---- Init ----
+  document.addEventListener('DOMContentLoaded', () => {
+    updateDate();
+    loadApiKey();
+    renderHistory();
+    initSpeechRecognition();
+  });
+
+  function updateDate() {
+    const now = new Date();
+    const d = now.toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'short' });
+    document.getElementById('dateDisplay').textContent = d;
+  }
+
+  // ---- API Key ----
+  function saveApiKey() {
+    const key = document.getElementById('apiKeyInput').value.trim();
+    if (key) {
+      localStorage.setItem('anthropic_api_key', key);
+      const s = document.getElementById('apiStatus');
+      s.classList.add('visible');
+      setTimeout(() => s.classList.remove('visible'), 3000);
+    }
+  }
+
+  function loadApiKey() {
+    const key = localStorage.getItem('anthropic_api_key');
+    if (key) document.getElementById('apiKeyInput').value = key;
+  }
+
+  function getApiKey() {
+    return document.getElementById('apiKeyInput').value.trim() || localStorage.getItem('anthropic_api_key');
+  }
+
+  // ---- Speech Recognition ----
+  function initSpeechRecognition() {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) {
+      document.getElementById('statusMsg').textContent = '⚠️ このブラウザは音声認識に対応していません（Chrome推奨）';
+      speechSupported = false;
+      return;
+    }
+    speechSupported = true;
+    recognition = new SR();
+    recognition.lang = 'ja-JP';
+    recognition.continuous = true;
+    recognition.interimResults = true;
+
+    recognition.onresult = (e) => {
+      let interim = '';
+      let final = '';
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const t = e.results[i][0].transcript;
+        if (e.results[i].isFinal) {
+          final += t;
+          fullTranscript += t + ' ';
+        } else {
+          interim += t;
+        }
+      }
+      document.getElementById('liveText').textContent = (fullTranscript + interim) || '🎤 音声を認識中...';
+    };
+
+    recognition.onerror = (e) => {
+      if (e.error !== 'no-speech') {
+        setStatus('⚠️ 音声認識エラー: ' + e.error);
+      }
+    };
+
+    recognition.onend = () => {
+      if (isRecording) {
+        // Auto restart
+        try { recognition.start(); } catch(e) {}
+      }
+    };
+  }
+
+  // ---- Recording ----
+  function toggleRecording() {
+    if (!isRecording) startRecording();
+    else stopRecording();
+  }
+
+  async function startRecording() {
+    if (!speechSupported) {
+      setStatus('⚠️ Chrome または Edge をお使いください');
+      return;
+    }
+    const key = getApiKey();
+    if (!key) {
+      setStatus('⚠️ まずAPIキーを入力してください');
+      document.getElementById('apiKeyInput').focus();
+      return;
+    }
+
+    fullTranscript = '';
+    isRecording = true;
+    seconds = 0;
+
+    // UI
+    const btn = document.getElementById('recordBtn');
+    btn.classList.add('recording');
+    document.getElementById('micIcon').textContent = '⏹️';
+    document.getElementById('recordLabel').textContent = '録音中（タップで停止）';
+    document.getElementById('liveArea').classList.add('active');
+    document.getElementById('liveText').textContent = '🎤 音声を認識中...';
+    document.getElementById('timer').classList.add('visible');
+    document.getElementById('results').classList.remove('visible');
+    document.getElementById('resetBtn').classList.remove('visible');
+
+    // Timer
+    updateTimer();
+    timerInterval = setInterval(updateTimer, 1000);
+
+    // Start recognition
+    try {
+      recognition.start();
+    } catch(e) {}
+
+    setStatus('🔴 録音中です...');
+  }
+
+  function stopRecording() {
+    isRecording = false;
+    clearInterval(timerInterval);
+
+    try { recognition.stop(); } catch(e) {}
+
+    const btn = document.getElementById('recordBtn');
+    btn.classList.remove('recording');
+    document.getElementById('micIcon').textContent = '🎙️';
+    document.getElementById('recordLabel').textContent = '録音開始';
+    document.getElementById('timer').classList.remove('visible');
+
+    setStatus('');
+    document.getElementById('liveArea').classList.remove('active');
+
+    if (!fullTranscript.trim()) {
+      setStatus('⚠️ 音声が認識されませんでした。マイクのアクセスを許可してください。');
+      return;
+    }
+
+    analyzeWithAI(fullTranscript);
+  }
+
+  function updateTimer() {
+    seconds++;
+    const m = String(Math.floor(seconds / 60)).padStart(2, '0');
+    const s = String(seconds % 60).padStart(2, '0');
+    document.getElementById('timer').textContent = m + ':' + s;
+  }
+
+  function setStatus(msg) {
+    document.getElementById('statusMsg').textContent = msg;
+  }
+
+  // ---- AI Analysis ----
+  async function analyzeWithAI(transcript) {
+    const apiKey = getApiKey();
+    if (!apiKey) { setStatus('⚠️ APIキーが未設定です'); return; }
+
+    document.getElementById('loading').classList.add('visible');
+    setStatus('');
+
+    const prompt = `あなたは優秀な営業アシスタントです。以下は商談の音声文字起こしです。
+
+【文字起こし】
+${transcript}
+
+以下の3つを日本語で出力してください。必ずJSON形式で返してください。
+
+{
+  "minutes": "議事録（誰が何を言ったかを整理。発言者が不明な場合は「話者A」「話者B」などで区別。箇条書きで5〜10項目）",
+  "actions": "次にやるべきアクション（営業担当者がすべき具体的な行動を箇条書きで3〜5項目）",
+  "temperature": "HOT または WARM または COLD のいずれか1つだけ",
+  "temperature_reason": "温度感の判断理由（1〜2文）"
+}
+
+HOT = 購買意欲が高く、成約が近い
+WARM = 興味はあるが検討中
+COLD = 興味が薄いまたは否定的`;
+
+    try {
+      const res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+          'anthropic-dangerous-direct-browser-access': 'true'
+        },
+        body: JSON.stringify({
+          model: 'claude-opus-4-8',
+          max_tokens: 2048,
+          messages: [{ role: 'user', content: prompt }]
+        })
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error?.message || `HTTP ${res.status}`);
+      }
+
+      const data = await res.json();
+      const text = data.content?.[0]?.text || '';
+
+      // Parse JSON from response
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) throw new Error('JSONの解析に失敗しました');
+      const parsed = JSON.parse(jsonMatch[0]);
+
+      showResults(parsed, transcript);
+    } catch (err) {
+      document.getElementById('loading').classList.remove('visible');
+      setStatus('❌ エラー: ' + err.message);
+      console.error(err);
+    }
+  }
+
+  function showResults(data, transcript) {
+    document.getElementById('loading').classList.remove('visible');
+
+    document.getElementById('minutesBody').textContent = data.minutes || '（取得できませんでした）';
+    document.getElementById('actionsBody').textContent = data.actions || '（取得できませんでした）';
+
+    const temp = (data.temperature || 'WARM').toUpperCase();
+    const badge = document.getElementById('tempBadge');
+    badge.textContent = temp;
+    badge.className = 'temp-badge ' + temp;
+    document.getElementById('tempReason').textContent = data.temperature_reason || '';
+
+    document.getElementById('results').classList.add('visible');
+    document.getElementById('resetBtn').classList.add('visible');
+
+    // Save to history
+    saveHistory({ transcript, ...data, date: new Date().toISOString() });
+    renderHistory();
+
+    // Scroll to results
+    document.getElementById('results').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  // ---- History ----
+  function saveHistory(entry) {
+    const hist = JSON.parse(localStorage.getItem('sales_history') || '[]');
+    hist.unshift(entry);
+    if (hist.length > 20) hist.splice(20);
+    localStorage.setItem('sales_history', JSON.stringify(hist));
+  }
+
+  function renderHistory() {
+    const hist = JSON.parse(localStorage.getItem('sales_history') || '[]');
+    const section = document.getElementById('historySection');
+    const list = document.getElementById('historyList');
+
+    if (hist.length === 0) { section.classList.remove('visible'); return; }
+    section.classList.add('visible');
+
+    list.innerHTML = hist.map((h, i) => {
+      const d = new Date(h.date);
+      const dateStr = d.toLocaleDateString('ja-JP', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+      const preview = (h.minutes || '').split('\n')[0].replace(/^[•・\-\*]\s*/, '').slice(0, 40) || '記録あり';
+      const temp = (h.temperature || 'WARM').toUpperCase();
+      return `<div class="history-item" onclick="loadHistory(${i})">
+        <span class="history-date">${dateStr}</span>
+        <span class="history-preview">${preview}...</span>
+        <span class="history-temp ${temp}">${temp}</span>
+      </div>`;
+    }).join('');
+  }
+
+  function loadHistory(index) {
+    const hist = JSON.parse(localStorage.getItem('sales_history') || '[]');
+    const h = hist[index];
+    if (!h) return;
+    showResults(h, h.transcript || '');
+  }
+
+  // ---- Reset ----
+  function resetAll() {
+    document.getElementById('results').classList.remove('visible');
+    document.getElementById('resetBtn').classList.remove('visible');
+    document.getElementById('liveArea').classList.remove('active');
+    document.getElementById('loading').classList.remove('visible');
+    document.getElementById('timer').classList.remove('visible');
+    fullTranscript = '';
+    seconds = 0;
+    setStatus('');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+</script>
+</body>
+</html>
