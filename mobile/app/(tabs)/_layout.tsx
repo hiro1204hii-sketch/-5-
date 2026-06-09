@@ -7,11 +7,13 @@ export default function TabLayout() {
     <Tabs
       screenOptions={{
         tabBarActiveTintColor: Colors.cream,
-        tabBarInactiveTintColor: 'rgba(250,246,240,0.5)',
+        tabBarInactiveTintColor: 'rgba(250,246,240,0.45)',
         tabBarStyle: {
           backgroundColor: Colors.darkBrown,
           borderTopColor: Colors.warmBrown,
           borderTopWidth: 1,
+          height: 60,
+          paddingBottom: 8,
         },
         headerStyle: { backgroundColor: Colors.darkBrown },
         headerTintColor: Colors.cream,
@@ -26,6 +28,16 @@ export default function TabLayout() {
           headerTitle: '📓 育てる営業手帳',
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="mic" color={color} size={size} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="customers"
+        options={{
+          title: '顧客',
+          headerTitle: '👥 顧客管理',
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="people-outline" color={color} size={size} />
           ),
         }}
       />
