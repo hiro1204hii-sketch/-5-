@@ -1,0 +1,734 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>育てる営業手帳 — 画面プレビュー</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@400;700&family=Noto+Sans+JP:wght@300;400;500;700&display=swap');
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#1a1a2e;font-family:'Noto Sans JP',sans-serif;padding:40px 20px;min-height:100vh}
+  h1{text-align:center;color:#f5ede0;font-family:'Noto Serif JP',serif;font-size:22px;margin-bottom:8px;letter-spacing:.1em}
+  .subtitle{text-align:center;color:rgba(245,237,224,.5);font-size:12px;margin-bottom:40px}
+
+  .screens{display:flex;flex-wrap:wrap;gap:32px;justify-content:center;max-width:1400px;margin:0 auto}
+  .screen-wrap{display:flex;flex-direction:column;align-items:center;gap:10px}
+  .screen-label{color:rgba(245,237,224,.7);font-size:12px;letter-spacing:.1em;text-align:center}
+
+  /* Phone frame */
+  .phone{
+    width:280px;height:580px;
+    background:#111;border-radius:36px;
+    padding:12px;position:relative;
+    box-shadow:0 0 0 2px #333,0 20px 60px rgba(0,0,0,.6);
+    flex-shrink:0;overflow:hidden;
+  }
+  .screen{
+    width:100%;height:100%;border-radius:26px;
+    overflow:hidden;position:relative;
+    background:#faf6f0;
+  }
+  /* notch */
+  .phone::before{
+    content:'';position:absolute;top:14px;left:50%;transform:translateX(-50%);
+    width:70px;height:20px;background:#111;border-radius:10px;z-index:100;
+  }
+
+  /* Colors */
+  :root{
+    --cream:#faf6f0;--paper:#f5ede0;
+    --brown:#8b5e3c;--dark:#4a2c0a;--light:#c4956a;
+    --line:#d4b896;--ink:#2c1a0e;
+    --hot:#c0392b;--warm:#e67e22;--cold:#2980b9;
+  }
+
+  /* ===== SCREEN STYLES ===== */
+
+  /* Tab bar */
+  .tabbar{
+    position:absolute;bottom:0;left:0;right:0;
+    height:50px;background:var(--dark);
+    display:flex;align-items:center;justify-content:space-around;
+    padding:0 4px;border-top:1px solid var(--brown);
+    z-index:50;
+  }
+  .tab{display:flex;flex-direction:column;align-items:center;gap:2px;opacity:.45}
+  .tab.active{opacity:1}
+  .tab-icon{font-size:18px}
+  .tab-label{font-size:8px;color:#faf6f0;font-weight:500}
+
+  /* Header */
+  .hdr{
+    background:linear-gradient(135deg,var(--dark),var(--brown));
+    padding:28px 14px 10px;
+    color:#faf6f0;
+    flex-shrink:0;
+  }
+  .hdr-title{font-family:'Noto Serif JP',serif;font-size:14px;font-weight:700;letter-spacing:.05em}
+  .hdr-sub{font-size:9px;opacity:.6;margin-top:1px}
+
+  /* ---- ONBOARDING ---- */
+  .s-onboard{
+    background:linear-gradient(160deg,var(--dark) 0%,var(--brown) 60%,var(--light) 100%);
+    display:flex;flex-direction:column;align-items:center;justify-content:space-between;
+    padding:40px 20px 24px;height:100%;
+  }
+  .ob-skip{align-self:flex-end;font-size:10px;color:rgba(250,246,240,.55)}
+  .ob-center{display:flex;flex-direction:column;align-items:center;gap:14px;flex:1;justify-content:center}
+  .ob-emoji{font-size:64px}
+  .ob-title{font-size:20px;font-weight:700;color:#faf6f0;text-align:center;line-height:1.5;font-family:'Noto Serif JP',serif}
+  .ob-desc{font-size:11px;color:rgba(250,246,240,.8);text-align:center;line-height:1.8}
+  .ob-dots{display:flex;gap:6px;margin-bottom:14px}
+  .ob-dot{width:6px;height:6px;border-radius:3px;background:rgba(255,255,255,.3)}
+  .ob-dot.active{width:18px;background:#faf6f0}
+  .ob-btn{
+    background:#faf6f0;border-radius:12px;padding:14px 40px;
+    font-size:14px;font-weight:700;color:var(--dark);width:100%;text-align:center
+  }
+
+  /* ---- RECORDING (HOME) ---- */
+  .s-record{display:flex;flex-direction:column;background:var(--cream);height:100%}
+  .rec-content{flex:1;padding:10px 12px;overflow:hidden;display:flex;flex-direction:column;gap:10px}
+  .rec-top{display:flex;justify-content:space-between;align-items:center}
+  .rec-date{font-size:10px;color:var(--brown)}
+  .usage-pill{background:rgba(139,94,60,.12);border-radius:20px;padding:3px 10px;font-size:9px;color:var(--brown);font-weight:500}
+  /* dashboard */
+  .dashboard{background:rgba(255,255,255,.6);border-radius:10px;padding:10px;border:1px solid var(--line)}
+  .dash-title{font-size:9px;font-weight:600;color:var(--brown);letter-spacing:.08em;margin-bottom:6px}
+  .dash-row{display:flex;gap:6px}
+  .dash-card{flex:1;border-radius:7px;padding:8px 4px;text-align:center;border:1px solid var(--line);background:rgba(196,149,106,.06)}
+  .dash-card.hot{border-color:rgba(192,57,43,.25);background:rgba(192,57,43,.06)}
+  .dash-card.warm{border-color:rgba(230,126,34,.25);background:rgba(230,126,34,.06)}
+  .dash-card.cold{border-color:rgba(41,128,185,.25);background:rgba(41,128,185,.06)}
+  .dash-num{font-size:18px;font-weight:700;color:var(--dark);line-height:1.2}
+  .dash-num.hot{color:var(--hot)} .dash-num.warm{color:var(--warm)} .dash-num.cold{color:var(--cold)}
+  .dash-lbl{font-size:8px;color:var(--brown)}
+  /* customer selector */
+  .customer-sel{
+    display:flex;align-items:center;gap:8px;
+    background:rgba(255,255,255,.55);border-radius:8px;padding:9px 10px;
+    border:1px solid var(--line);font-size:11px;color:var(--light)
+  }
+  /* record button area */
+  .rec-area{display:flex;flex-direction:column;align-items:center;gap:10px;padding:8px 0}
+  .rec-hint{font-size:10px;color:var(--brown);font-style:italic}
+  .rec-btn{
+    width:90px;height:90px;border-radius:45px;
+    border:3.5px solid var(--brown);background:var(--cream);
+    display:flex;align-items:center;justify-content:center;
+    font-size:38px;
+    box-shadow:0 4px 12px rgba(74,44,10,.2)
+  }
+  .rec-btn.active{border-color:var(--hot);box-shadow:0 4px 20px rgba(192,57,43,.35)}
+  .rec-timer{font-size:22px;font-weight:700;color:var(--hot);letter-spacing:.15em}
+  .rec-lbl{font-size:11px;font-weight:500;color:var(--ink)}
+  .upgrade-bar{background:rgba(192,57,43,.08);border-radius:7px;padding:9px;border:1px solid rgba(192,57,43,.2);font-size:10px;color:var(--hot);text-align:center;line-height:1.6}
+  .ruled-lines{flex:1;overflow:hidden}
+  .ruled-line{height:1px;background:var(--line);margin-bottom:28px}
+
+  /* ---- RESULTS ---- */
+  .s-results{display:flex;flex-direction:column;background:var(--cream);height:100%}
+  .res-content{flex:1;padding:10px 12px;overflow:hidden;display:flex;flex-direction:column;gap:8px}
+  .res-meta{display:flex;justify-content:space-between;align-items:center}
+  .res-date{font-size:10px;color:var(--brown)}
+  .res-dur{font-size:9px;color:var(--light);background:rgba(196,149,106,.15);border-radius:10px;padding:2px 8px}
+  /* temp badge */
+  .temp-section{
+    background:rgba(255,255,255,.5);border-radius:10px;
+    border:1px solid var(--line);padding:14px 10px;
+    display:flex;flex-direction:column;align-items:center;gap:7px
+  }
+  .temp-badge{
+    display:inline-flex;align-items:center;gap:6px;
+    padding:8px 24px;border-radius:30px;
+    font-size:18px;font-weight:700;color:white;letter-spacing:.15em
+  }
+  .temp-badge.hot{background:linear-gradient(135deg,#e74c3c,#c0392b)}
+  .temp-badge.warm{background:linear-gradient(135deg,#f39c12,#e67e22)}
+  .temp-badge.cold{background:linear-gradient(135deg,#3498db,#2980b9)}
+  .temp-reason{font-size:10px;color:var(--brown);text-align:center;font-style:italic;line-height:1.5}
+  /* result cards */
+  .result-card{background:rgba(255,255,255,.6);border-radius:8px;border:1px solid var(--line);overflow:hidden}
+  .rc-head{
+    display:flex;align-items:center;gap:6px;padding:8px 10px;
+    border-bottom:1px solid var(--line);background:rgba(196,149,106,.08)
+  }
+  .rc-title{font-size:11px;font-weight:700;color:var(--dark)}
+  .rc-body{padding:9px 10px;font-size:10px;color:var(--ink);line-height:1.8}
+  .action-row{display:flex;gap:8px}
+  .share-btn{flex:1;background:var(--dark);border-radius:7px;padding:10px;text-align:center;font-size:11px;font-weight:600;color:#faf6f0}
+  .del-btn{padding:10px 14px;border-radius:7px;border:1px solid var(--line);font-size:11px;color:var(--brown)}
+
+  /* ---- CUSTOMERS ---- */
+  .s-customers{display:flex;flex-direction:column;background:var(--cream);height:100%}
+  .cust-content{flex:1;padding:10px 12px;overflow:hidden;display:flex;flex-direction:column;gap:8px}
+  .cust-item{
+    display:flex;align-items:center;gap:10px;
+    background:rgba(255,255,255,.6);border-radius:10px;
+    padding:10px;border:1px solid var(--line)
+  }
+  .cust-avatar{
+    width:40px;height:40px;border-radius:20px;
+    background:var(--light);display:flex;align-items:center;justify-content:center;
+    font-size:17px;font-weight:700;color:#faf6f0;flex-shrink:0
+  }
+  .cust-info{flex:1}
+  .cust-name{font-size:13px;font-weight:600;color:var(--ink)}
+  .cust-company{font-size:10px;color:var(--brown)}
+  .cust-meta{font-size:9px;color:var(--light);margin-top:2px}
+  .temp-pill{
+    font-size:9px;font-weight:700;padding:2px 7px;border-radius:10px
+  }
+  .tp-hot{color:var(--hot);background:rgba(192,57,43,.12)}
+  .tp-warm{color:var(--warm);background:rgba(230,126,34,.12)}
+  .tp-cold{color:var(--cold);background:rgba(41,128,185,.12)}
+  .fab{
+    position:absolute;bottom:60px;right:14px;
+    width:44px;height:44px;border-radius:22px;
+    background:var(--dark);display:flex;align-items:center;justify-content:center;
+    font-size:24px;color:#faf6f0;
+    box-shadow:0 4px 12px rgba(74,44,10,.35)
+  }
+
+  /* ---- HISTORY ---- */
+  .s-history{display:flex;flex-direction:column;background:var(--cream);height:100%}
+  .filter-bar{display:flex;gap:5px;padding:8px 10px;background:rgba(196,149,106,.1);border-bottom:1px solid var(--line)}
+  .filter-btn{padding:4px 10px;border-radius:15px;font-size:9px;border:1px solid var(--line);background:var(--cream);color:var(--brown);font-weight:500}
+  .filter-btn.active{background:var(--dark);border-color:var(--dark);color:#faf6f0}
+  .hist-content{flex:1;padding:10px 12px;display:flex;flex-direction:column;gap:7px;overflow:hidden}
+  .hist-item{
+    display:flex;align-items:center;gap:8px;
+    background:rgba(255,255,255,.6);border-radius:9px;
+    padding:10px;border:1px solid var(--line)
+  }
+  .hist-dot{width:10px;height:10px;border-radius:5px;flex-shrink:0}
+  .hist-body{flex:1}
+  .hist-date{font-size:9px;color:var(--brown)}
+  .hist-preview{font-size:11px;color:var(--ink);margin-top:1px}
+  .hist-temp{font-size:9px;font-weight:700}
+
+  /* ---- SETTINGS ---- */
+  .s-settings{display:flex;flex-direction:column;background:var(--cream);height:100%}
+  .set-content{flex:1;padding:10px 12px;display:flex;flex-direction:column;gap:10px;overflow:hidden}
+  .set-plan-card{
+    background:rgba(139,94,60,.06);border-radius:10px;padding:12px;
+    border:2px solid var(--brown)
+  }
+  .plan-top{display:flex;justify-content:space-between;align-items:center}
+  .plan-name{font-size:13px;font-weight:700;color:var(--dark)}
+  .plan-btn{background:var(--brown);border-radius:15px;padding:4px 12px;font-size:9px;font-weight:600;color:#faf6f0}
+  .plan-desc{font-size:10px;color:var(--brown);margin-top:4px;line-height:1.6}
+  .set-section{background:rgba(255,255,255,.6);border-radius:10px;padding:12px;border:1px solid var(--line);display:flex;flex-direction:column;gap:8px}
+  .set-title{font-size:11px;font-weight:700;color:var(--dark)}
+  .set-field{display:flex;flex-direction:column;gap:3px}
+  .set-label{font-size:9px;font-weight:500;color:var(--ink)}
+  .set-input{border:1px solid var(--line);border-radius:6px;padding:7px 9px;font-size:10px;color:var(--light);background:var(--cream)}
+  .set-save{background:var(--dark);border-radius:7px;padding:10px;text-align:center;font-size:11px;font-weight:600;color:#faf6f0;margin-top:2px}
+  .set-info{background:rgba(139,94,60,.06);border-radius:8px;padding:10px;border:1px solid rgba(196,149,106,.3)}
+  .set-info-title{font-size:10px;font-weight:600;color:var(--brown)}
+  .set-info-text{font-size:9px;color:var(--brown);line-height:1.7;margin-top:3px}
+
+  /* ---- PAYWALL ---- */
+  .s-paywall{display:flex;flex-direction:column;background:var(--cream);height:100%}
+  .pay-hero{
+    background:linear-gradient(135deg,var(--dark),var(--brown));
+    padding:24px 16px 18px;display:flex;flex-direction:column;align-items:center;gap:5px
+  }
+  .pay-icon{font-size:32px}
+  .pay-title{font-size:16px;font-weight:700;color:#faf6f0;font-family:'Noto Serif JP',serif}
+  .pay-sub{font-size:9px;color:rgba(250,246,240,.7);letter-spacing:.15em}
+  .pay-desc{font-size:10px;color:rgba(250,246,240,.75);text-align:center;line-height:1.7;margin-top:3px}
+  .pay-body{padding:10px 12px;display:flex;flex-direction:column;gap:10px;flex:1}
+  .pay-plans{display:flex;gap:8px}
+  .pay-card{flex:1;border-radius:10px;border:1px solid var(--line);padding:10px;background:rgba(255,255,255,.5)}
+  .pay-card.pro{border:2px solid var(--brown);background:rgba(139,94,60,.05)}
+  .pay-badge{background:var(--brown);border-radius:8px;padding:2px 8px;font-size:8px;font-weight:700;color:#faf6f0;align-self:flex-start;margin-bottom:4px}
+  .pay-plan-name{font-size:12px;font-weight:700;color:var(--brown)}
+  .pay-plan-name.pro{color:var(--dark)}
+  .pay-price{font-size:15px;font-weight:700;color:var(--brown);margin:2px 0}
+  .pay-price.pro{color:var(--dark)}
+  .pay-note{font-size:8px;color:var(--light);margin-bottom:4px}
+  .pay-feat{font-size:9px;color:var(--brown);line-height:1.8}
+  .pay-feat.pro{color:var(--dark);font-weight:500}
+  .pay-cta{
+    background:var(--dark);border-radius:10px;padding:14px;
+    text-align:center;display:flex;flex-direction:column;gap:2px
+  }
+  .pay-cta-title{font-size:14px;font-weight:700;color:#faf6f0}
+  .pay-cta-price{font-size:10px;color:rgba(250,246,240,.65)}
+  .pay-restore{font-size:10px;color:var(--light);text-align:center;text-decoration:underline}
+
+  /* ---- CUSTOMER DETAIL ---- */
+  .s-cdetail{display:flex;flex-direction:column;background:var(--cream);height:100%}
+  .cd-content{flex:1;padding:10px 12px;overflow:hidden;display:flex;flex-direction:column;gap:8px}
+  .cd-profile{
+    background:rgba(255,255,255,.65);border-radius:12px;padding:14px;
+    border:1px solid var(--line);display:flex;flex-direction:column;align-items:center;gap:7px
+  }
+  .cd-avatar{
+    width:56px;height:56px;border-radius:28px;background:var(--light);
+    display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:700;color:#faf6f0
+  }
+  .cd-name{font-size:18px;font-weight:700;color:var(--dark)}
+  .cd-company{font-size:11px;color:var(--brown)}
+  .cd-contact-row{display:flex;gap:6px}
+  .cd-contact{
+    background:rgba(139,94,60,.1);border-radius:15px;padding:5px 12px;
+    font-size:10px;color:var(--brown);display:flex;align-items:center;gap:4px
+  }
+  .cd-stats{display:flex;gap:6px}
+  .cd-stat{
+    flex:1;background:rgba(255,255,255,.6);border-radius:8px;padding:8px;
+    border:1px solid var(--line);text-align:center
+  }
+  .cd-stat-num{font-size:18px;font-weight:700;color:var(--dark)}
+  .cd-stat-num.hot{color:var(--hot)} .cd-stat-num.warm{color:var(--warm)} .cd-stat-num.cold{color:var(--cold)}
+  .cd-stat-lbl{font-size:9px;color:var(--brown)}
+  .cd-hist{display:flex;flex-direction:column;gap:6px}
+  .cd-hist-title{font-size:11px;font-weight:700;color:var(--dark)}
+  .cd-hist-item{
+    display:flex;align-items:center;gap:8px;
+    background:rgba(255,255,255,.55);border-radius:8px;
+    padding:8px 10px;border:1px solid var(--line)
+  }
+  .cd-hist-dot{width:8px;height:8px;border-radius:4px}
+  .cd-hist-body{flex:1}
+  .cd-hist-date{font-size:9px;color:var(--brown)}
+  .cd-hist-preview{font-size:10px;color:var(--ink)}
+  .cd-hist-temp{font-size:9px;font-weight:700}
+</style>
+</head>
+<body>
+<h1>📓 育てる営業手帳</h1>
+<p class="subtitle">全画面プレビュー — React Native (Expo)</p>
+
+<div class="screens">
+
+  <!-- 1. ONBOARDING -->
+  <div class="screen-wrap">
+    <div class="phone">
+      <div class="screen">
+        <div class="s-onboard">
+          <div class="ob-skip">スキップ</div>
+          <div class="ob-center">
+            <div class="ob-emoji">📓</div>
+            <div class="ob-title">育てる営業手帳へ<br>ようこそ</div>
+            <div class="ob-desc">商談を録音するだけで<br>AIが議事録・次のアクション・<br>お客様の温度感を自動生成します</div>
+          </div>
+          <div class="ob-dots">
+            <div class="ob-dot active"></div>
+            <div class="ob-dot"></div>
+            <div class="ob-dot"></div>
+            <div class="ob-dot"></div>
+          </div>
+          <div class="ob-btn">次へ →</div>
+        </div>
+      </div>
+    </div>
+    <div class="screen-label">① オンボーディング</div>
+  </div>
+
+  <!-- 2. RECORDING (HOME) -->
+  <div class="screen-wrap">
+    <div class="phone">
+      <div class="screen">
+        <div class="s-record">
+          <div class="hdr">
+            <div class="hdr-title">📓 育てる営業手帳</div>
+          </div>
+          <div class="rec-content">
+            <div class="rec-top">
+              <div class="rec-date">2026年6月10日（水）</div>
+              <div class="usage-pill">今月の残り: 3/5回</div>
+            </div>
+            <div class="dashboard">
+              <div class="dash-title">パイプライン</div>
+              <div class="dash-row">
+                <div class="dash-card hot"><div class="dash-num hot">3</div><div class="dash-lbl">🔥 HOT</div></div>
+                <div class="dash-card warm"><div class="dash-num warm">7</div><div class="dash-lbl">☀️ WARM</div></div>
+                <div class="dash-card cold"><div class="dash-num cold">2</div><div class="dash-lbl">❄️ COLD</div></div>
+                <div class="dash-card"><div class="dash-num">12</div><div class="dash-lbl">合計</div></div>
+              </div>
+            </div>
+            <div class="customer-sel">
+              <span>👤</span>
+              <span>山田 太郎（株式会社〇〇）</span>
+            </div>
+            <div class="rec-area">
+              <div class="rec-hint">録音ボタンで商談を記録</div>
+              <div class="rec-btn">🎙️</div>
+              <div class="rec-lbl">録音開始</div>
+            </div>
+            <div class="ruled-lines">
+              <div class="ruled-line"></div><div class="ruled-line"></div>
+              <div class="ruled-line"></div><div class="ruled-line"></div>
+            </div>
+          </div>
+          <div class="tabbar">
+            <div class="tab active"><div class="tab-icon">🎙</div><div class="tab-label">録音</div></div>
+            <div class="tab"><div class="tab-icon">👥</div><div class="tab-label">顧客</div></div>
+            <div class="tab"><div class="tab-icon">📚</div><div class="tab-label">履歴</div></div>
+            <div class="tab"><div class="tab-icon">⚙️</div><div class="tab-label">設定</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="screen-label">② 録音画面（ダッシュボード付き）</div>
+  </div>
+
+  <!-- 3. RECORDING ACTIVE -->
+  <div class="screen-wrap">
+    <div class="phone">
+      <div class="screen">
+        <div class="s-record">
+          <div class="hdr"><div class="hdr-title">📓 育てる営業手帳</div></div>
+          <div class="rec-content">
+            <div class="rec-top">
+              <div class="rec-date">2026年6月10日（水）</div>
+              <div class="usage-pill" style="background:rgba(192,57,43,.12);color:#c0392b">🔴 録音中</div>
+            </div>
+            <div class="customer-sel" style="border-color:#c4956a;background:rgba(139,94,60,.08)">
+              <span>👤</span><span style="color:#4a2c0a;font-weight:500">山田 太郎（株式会社〇〇）</span>
+            </div>
+            <div class="rec-area" style="gap:12px">
+              <div class="rec-hint" style="color:#c0392b">商談が終わったら停止してください</div>
+              <div class="rec-btn active">⏹</div>
+              <div class="rec-timer">02:34</div>
+              <div class="rec-lbl">タップして停止</div>
+            </div>
+            <div style="background:rgba(139,94,60,.08);border-radius:8px;padding:10px;border:1px dashed #d4b896;font-size:10px;color:#8b5e3c;line-height:1.7;font-style:italic">
+              🎤 ...そうですね、来月中には決めたいと思っています。予算は問題ないです。上司にも相談して...
+            </div>
+          </div>
+          <div class="tabbar">
+            <div class="tab active"><div class="tab-icon">🎙</div><div class="tab-label">録音</div></div>
+            <div class="tab"><div class="tab-icon">👥</div><div class="tab-label">顧客</div></div>
+            <div class="tab"><div class="tab-icon">📚</div><div class="tab-label">履歴</div></div>
+            <div class="tab"><div class="tab-icon">⚙️</div><div class="tab-label">設定</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="screen-label">③ 録音中（リアルタイム文字起こし）</div>
+  </div>
+
+  <!-- 4. RESULTS -->
+  <div class="screen-wrap">
+    <div class="phone">
+      <div class="screen">
+        <div class="s-results">
+          <div class="hdr" style="display:flex;align-items:center;gap:8px">
+            <span style="font-size:12px;opacity:.7">←</span>
+            <div class="hdr-title">分析結果</div>
+          </div>
+          <div class="res-content">
+            <div class="res-meta">
+              <div class="res-date">6月10日（水）14:23</div>
+              <div class="res-dur">2分34秒</div>
+            </div>
+            <div class="temp-section">
+              <div class="temp-badge hot">🔥 HOT</div>
+              <div class="temp-reason">「来月中に決めたい」「予算は問題ない」と明言。<br>成約の可能性が非常に高い。</div>
+            </div>
+            <div class="result-card">
+              <div class="rc-head"><span>📝</span><span class="rc-title">議事録</span></div>
+              <div class="rc-body">• 顧客：来月中に導入を決断したい<br>• 予算：問題なし、決裁権あり<br>• 競合：他社も検討中だが自社優位<br>• 次回：上司を交えた最終確認希望</div>
+            </div>
+            <div class="result-card">
+              <div class="rc-head"><span>✅</span><span class="rc-title">次のアクション</span></div>
+              <div class="rc-body">• 来週中に提案書を送付する<br>• 上司同席の打ち合わせを設定<br>• 導入事例資料を準備</div>
+            </div>
+            <div class="action-row">
+              <div class="share-btn">📤 共有</div>
+              <div class="del-btn">🗑 削除</div>
+            </div>
+          </div>
+          <div class="tabbar">
+            <div class="tab active"><div class="tab-icon">🎙</div><div class="tab-label">録音</div></div>
+            <div class="tab"><div class="tab-icon">👥</div><div class="tab-label">顧客</div></div>
+            <div class="tab"><div class="tab-icon">📚</div><div class="tab-label">履歴</div></div>
+            <div class="tab"><div class="tab-icon">⚙️</div><div class="tab-label">設定</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="screen-label">④ AI分析結果</div>
+  </div>
+
+  <!-- 5. CUSTOMERS -->
+  <div class="screen-wrap">
+    <div class="phone">
+      <div class="screen">
+        <div class="s-customers">
+          <div class="hdr"><div class="hdr-title">👥 顧客管理</div></div>
+          <div class="cust-content">
+            <div class="cust-item">
+              <div class="cust-avatar">山</div>
+              <div class="cust-info">
+                <div style="display:flex;justify-content:space-between;align-items:center">
+                  <div class="cust-name">山田 太郎</div>
+                  <div class="temp-pill tp-hot">🔥 HOT</div>
+                </div>
+                <div class="cust-company">株式会社アルファ</div>
+                <div class="cust-meta">商談 4回 · 最終: 6月10日</div>
+              </div>
+            </div>
+            <div class="cust-item">
+              <div class="cust-avatar" style="background:#c4956a">田</div>
+              <div class="cust-info">
+                <div style="display:flex;justify-content:space-between;align-items:center">
+                  <div class="cust-name">田中 花子</div>
+                  <div class="temp-pill tp-warm">☀️ WARM</div>
+                </div>
+                <div class="cust-company">ベータ商事</div>
+                <div class="cust-meta">商談 2回 · 最終: 6月8日</div>
+              </div>
+            </div>
+            <div class="cust-item">
+              <div class="cust-avatar" style="background:#8b6040">鈴</div>
+              <div class="cust-info">
+                <div style="display:flex;justify-content:space-between;align-items:center">
+                  <div class="cust-name">鈴木 一郎</div>
+                  <div class="temp-pill tp-cold">❄️ COLD</div>
+                </div>
+                <div class="cust-company">ガンマ工業</div>
+                <div class="cust-meta">商談 1回 · 最終: 6月5日</div>
+              </div>
+            </div>
+            <div class="cust-item">
+              <div class="cust-avatar" style="background:#a87850">佐</div>
+              <div class="cust-info">
+                <div style="display:flex;justify-content:space-between;align-items:center">
+                  <div class="cust-name">佐藤 恵子</div>
+                  <div class="temp-pill tp-warm">☀️ WARM</div>
+                </div>
+                <div class="cust-company">デルタコーポレーション</div>
+                <div class="cust-meta">商談 3回 · 最終: 6月3日</div>
+              </div>
+            </div>
+          </div>
+          <div class="fab">＋</div>
+          <div class="tabbar">
+            <div class="tab"><div class="tab-icon">🎙</div><div class="tab-label">録音</div></div>
+            <div class="tab active"><div class="tab-icon">👥</div><div class="tab-label">顧客</div></div>
+            <div class="tab"><div class="tab-icon">📚</div><div class="tab-label">履歴</div></div>
+            <div class="tab"><div class="tab-icon">⚙️</div><div class="tab-label">設定</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="screen-label">⑤ 顧客管理</div>
+  </div>
+
+  <!-- 6. CUSTOMER DETAIL -->
+  <div class="screen-wrap">
+    <div class="phone">
+      <div class="screen">
+        <div class="s-cdetail">
+          <div class="hdr" style="display:flex;align-items:center;gap:8px">
+            <span style="font-size:12px;opacity:.7">←</span>
+            <div class="hdr-title">顧客詳細</div>
+          </div>
+          <div class="cd-content">
+            <div class="cd-profile">
+              <div class="cd-avatar">山</div>
+              <div class="cd-name">山田 太郎</div>
+              <div class="cd-company">株式会社アルファ</div>
+              <div style="display:inline-flex;align-items:center;gap:6px;padding:7px 22px;border-radius:25px;background:linear-gradient(135deg,#e74c3c,#c0392b);color:white">
+                <span style="font-size:16px">🔥</span>
+                <span style="font-size:16px;font-weight:700;letter-spacing:.1em">HOT</span>
+              </div>
+              <div class="cd-contact-row">
+                <div class="cd-contact">📞 090-0000-0000</div>
+                <div class="cd-contact">✉️ メール</div>
+              </div>
+            </div>
+            <div class="cd-stats">
+              <div class="cd-stat"><div class="cd-stat-num">4</div><div class="cd-stat-lbl">商談数</div></div>
+              <div class="cd-stat"><div class="cd-stat-num hot">2</div><div class="cd-stat-lbl">🔥 HOT</div></div>
+              <div class="cd-stat"><div class="cd-stat-num warm">2</div><div class="cd-stat-lbl">☀️ WARM</div></div>
+              <div class="cd-stat"><div class="cd-stat-num cold">0</div><div class="cd-stat-lbl">❄️ COLD</div></div>
+            </div>
+            <div class="cd-hist">
+              <div class="cd-hist-title">商談履歴</div>
+              <div class="cd-hist-item">
+                <div class="cd-hist-dot" style="background:#c0392b"></div>
+                <div class="cd-hist-body">
+                  <div class="cd-hist-date">6月10日（水）14:23</div>
+                  <div class="cd-hist-preview">来月中に導入を決断したいと明言...</div>
+                </div>
+                <div class="cd-hist-temp" style="color:#c0392b">HOT</div>
+              </div>
+              <div class="cd-hist-item">
+                <div class="cd-hist-dot" style="background:#e67e22"></div>
+                <div class="cd-hist-body">
+                  <div class="cd-hist-date">6月3日（水）10:15</div>
+                  <div class="cd-hist-preview">価格面で少し懸念あり。上司に...</div>
+                </div>
+                <div class="cd-hist-temp" style="color:#e67e22">WARM</div>
+              </div>
+            </div>
+          </div>
+          <div class="tabbar">
+            <div class="tab"><div class="tab-icon">🎙</div><div class="tab-label">録音</div></div>
+            <div class="tab active"><div class="tab-icon">👥</div><div class="tab-label">顧客</div></div>
+            <div class="tab"><div class="tab-icon">📚</div><div class="tab-label">履歴</div></div>
+            <div class="tab"><div class="tab-icon">⚙️</div><div class="tab-label">設定</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="screen-label">⑥ 顧客詳細</div>
+  </div>
+
+  <!-- 7. HISTORY -->
+  <div class="screen-wrap">
+    <div class="phone">
+      <div class="screen">
+        <div class="s-history">
+          <div class="hdr"><div class="hdr-title">📚 商談履歴</div></div>
+          <div class="filter-bar">
+            <div class="filter-btn active">全て</div>
+            <div class="filter-btn">🔥 HOT</div>
+            <div class="filter-btn">☀️ WARM</div>
+            <div class="filter-btn">❄️ COLD</div>
+          </div>
+          <div class="hist-content">
+            <div class="hist-item">
+              <div class="hist-dot" style="background:#c0392b"></div>
+              <div class="hist-body">
+                <div class="hist-date">6月10日（水）14:23 — 山田 太郎</div>
+                <div class="hist-preview">来月中に導入を決断したいと...</div>
+              </div>
+              <div class="hist-temp" style="color:#c0392b">HOT</div>
+            </div>
+            <div class="hist-item">
+              <div class="hist-dot" style="background:#e67e22"></div>
+              <div class="hist-body">
+                <div class="hist-date">6月8日（月）11:00 — 田中 花子</div>
+                <div class="hist-preview">予算申請を来週提出予定。検討...</div>
+              </div>
+              <div class="hist-temp" style="color:#e67e22">WARM</div>
+            </div>
+            <div class="hist-item">
+              <div class="hist-dot" style="background:#c0392b"></div>
+              <div class="hist-body">
+                <div class="hist-date">6月7日（日）16:30 — 山田 太郎</div>
+                <div class="hist-preview">競合との比較検討を終え、自社...</div>
+              </div>
+              <div class="hist-temp" style="color:#c0392b">HOT</div>
+            </div>
+            <div class="hist-item">
+              <div class="hist-dot" style="background:#2980b9"></div>
+              <div class="hist-body">
+                <div class="hist-date">6月5日（金）09:45 — 鈴木 一郎</div>
+                <div class="hist-preview">現状のシステムに満足している...</div>
+              </div>
+              <div class="hist-temp" style="color:#2980b9">COLD</div>
+            </div>
+            <div class="hist-item">
+              <div class="hist-dot" style="background:#e67e22"></div>
+              <div class="hist-body">
+                <div class="hist-date">6月3日（水）10:15 — 山田 太郎</div>
+                <div class="hist-preview">価格面で少し懸念あり。上司に...</div>
+              </div>
+              <div class="hist-temp" style="color:#e67e22">WARM</div>
+            </div>
+          </div>
+          <div class="tabbar">
+            <div class="tab"><div class="tab-icon">🎙</div><div class="tab-label">録音</div></div>
+            <div class="tab"><div class="tab-icon">👥</div><div class="tab-label">顧客</div></div>
+            <div class="tab active"><div class="tab-icon">📚</div><div class="tab-label">履歴</div></div>
+            <div class="tab"><div class="tab-icon">⚙️</div><div class="tab-label">設定</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="screen-label">⑦ 商談履歴</div>
+  </div>
+
+  <!-- 8. SETTINGS -->
+  <div class="screen-wrap">
+    <div class="phone">
+      <div class="screen">
+        <div class="s-settings">
+          <div class="hdr"><div class="hdr-title">⚙️ 設定</div></div>
+          <div class="set-content">
+            <div class="set-plan-card">
+              <div class="plan-top">
+                <div class="plan-name">🎁 フリープラン</div>
+                <div class="plan-btn">アップグレード</div>
+              </div>
+              <div class="plan-desc">毎月5回まで無料で利用できます<br>購入を復元する</div>
+            </div>
+            <div class="set-section">
+              <div class="set-title">🔑 APIキー設定</div>
+              <div class="set-field">
+                <div class="set-label">Anthropic APIキー（必須）</div>
+                <div class="set-input">sk-ant-••••••••••••••••••</div>
+              </div>
+              <div class="set-field">
+                <div class="set-label">OpenAI APIキー（推奨）</div>
+                <div class="set-input">sk-••••••••••••••••••</div>
+              </div>
+              <div class="set-save">保存する</div>
+            </div>
+            <div class="set-info">
+              <div class="set-info-title">🔒 プライバシーについて</div>
+              <div class="set-info-text">APIキーはお使いの端末のみに保存されます。外部サーバーには送信されません。</div>
+            </div>
+            <div style="text-align:center;font-size:9px;color:#c4956a">育てる営業手帳 v1.0.0</div>
+          </div>
+          <div class="tabbar">
+            <div class="tab"><div class="tab-icon">🎙</div><div class="tab-label">録音</div></div>
+            <div class="tab"><div class="tab-icon">👥</div><div class="tab-label">顧客</div></div>
+            <div class="tab"><div class="tab-icon">📚</div><div class="tab-label">履歴</div></div>
+            <div class="tab active"><div class="tab-icon">⚙️</div><div class="tab-label">設定</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="screen-label">⑧ 設定</div>
+  </div>
+
+  <!-- 9. PAYWALL -->
+  <div class="screen-wrap">
+    <div class="phone">
+      <div class="screen">
+        <div class="s-paywall">
+          <div class="pay-hero">
+            <div class="pay-icon">📓✨</div>
+            <div class="pay-title">育てる営業手帳</div>
+            <div class="pay-sub">P R O プ ラ ン</div>
+            <div class="pay-desc">商談を無制限に記録・分析して<br>最速で成約率を高めましょう</div>
+          </div>
+          <div class="pay-body">
+            <div class="pay-plans">
+              <div class="pay-card">
+                <div class="pay-plan-name">フリー</div>
+                <div class="pay-price">¥0</div>
+                <div class="pay-feat">• 月5回まで分析<br>• 議事録・アクション<br>• 温度感判定<br>• 履歴閲覧</div>
+              </div>
+              <div class="pay-card pro">
+                <div class="pay-badge">おすすめ</div>
+                <div class="pay-plan-name pro">プロ</div>
+                <div class="pay-price pro">¥980/月</div>
+                <div class="pay-note">いつでも解約可能</div>
+                <div class="pay-feat pro">✓ 無制限の商談分析<br>✓ 議事録・アクション<br>✓ 温度感判定<br>✓ 履歴・共有<br>✓ 優先サポート<br>✓ 新機能早期アクセス</div>
+              </div>
+            </div>
+            <div class="pay-cta">
+              <div class="pay-cta-title">プロプランを始める</div>
+              <div class="pay-cta-price">¥980/月 · いつでも解約可</div>
+            </div>
+            <div class="pay-restore">以前の購入を復元する</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="screen-label">⑨ ペイウォール（¥980/月）</div>
+  </div>
+
+</div>
+</body>
+</html>
