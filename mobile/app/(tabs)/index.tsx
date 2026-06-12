@@ -1,404 +1,279 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import {
-  View, Text, StyleSheet, TouchableOpacity, Alert,
-  ScrollView, ActivityIndicator, Modal, FlatList,
-} from 'react-native';
+import React, { useCallback, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
-import * as Haptics from 'expo-haptics';
-import Animated, {
-  useSharedValue, useAnimatedStyle,
-  withRepeat, withTiming, withSequence,
-} from 'react-native-reanimated';
-import { useRecording } from '../../hooks/useRecording';
+import { LinearGradient } from 'expo-linear-gradient';
+import { getResults, getReminders, getGamification, recordDailyActivity, getSettings } from '../../hooks/useStorage';
 import { useSubscription } from '../../hooks/useSubscription';
-import {
-  getSettings, getUsageThisMonth, incrementUsage, saveResult,
-  getResults, getCustomers, updateCustomerTemperature,
-} from '../../hooks/useStorage';
-import { transcribeAudio } from '../../services/transcriptionService';
-import { analyzeTranscript } from '../../services/anthropicService';
 import { UsageBadge } from '../../components/UsageBadge';
-import { Colors, FREE_TIER_LIMIT } from '../../constants/theme';
-import { Customer, Temperature } from '../../types';
+import { Colors, Gradients, DAILY_QUOTES } from '../../constants/theme';
+import { AnalysisResult, Reminder } from '../../types';
 
-const TEMP_COLORS: Record<Temperature, string> = {
-  HOT: Colors.hot, WARM: Colors.warm, COLD: Colors.cold,
-};
+const TEMP_COLORS = { HOT: Colors.hot, WARM: Colors.warm, COLD: Colors.cold } as const;
+const TEMP_EMOJIS = { HOT: '🔥', WARM: '☀️', COLD: '❄️' } as const;
 
-export default function RecordScreen() {
-  const { state, duration, formattedDuration, startRecording, stopRecording, reset } = useRecording();
+export default function HomeScreen() {
   const { isProUser } = useSubscription();
-  const [usageCount, setUsageCount] = useState(0);
-  const [statusText, setStatusText] = useState('');
-  const [stats, setStats] = useState({ total: 0, hot: 0, warm: 0, cold: 0 });
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
-  const [showCustomerPicker, setShowCustomerPicker] = useState(false);
+  const [data, setData] = useState({
+    userName: '',
+    streak: 0, level: 1, monthlyScore: 0,
+    hotCount: 0, warmCount: 0, coldCount: 0, totalDeals: 0,
+    todayReminders: 0, upcomingMeetings: 0, urgentDeals: 0,
+    recentResults: [] as AnalysisResult[],
+    usageCount: 0,
+    quote: DAILY_QUOTES[new Date().getDay() % DAILY_QUOTES.length],
+  });
+  const [refreshing, setRefreshing] = useState(false);
 
-  const pulseScale = useSharedValue(1);
-  const pulseStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: pulseScale.value }],
-  }));
-
-  useFocusEffect(useCallback(() => {
-    loadData();
-  }, []));
-
-  const loadData = async () => {
-    const [count, results, custs] = await Promise.all([
-      getUsageThisMonth(),
-      getResults(),
-      getCustomers(),
+  const load = useCallback(async () => {
+    const [results, reminders, gamif, settings] = await Promise.all([
+      getResults(), getReminders(), recordDailyActivity(), getSettings(),
     ]);
-    setUsageCount(count);
-    setCustomers(custs);
-    setStats({
-      total: results.length,
-      hot: results.filter(r => r.temperature === 'HOT').length,
-      warm: results.filter(r => r.temperature === 'WARM').length,
-      cold: results.filter(r => r.temperature === 'COLD').length,
+    const today = new Date().toISOString().slice(0, 10);
+    const todayReminders = reminders.filter(r => !r.done && r.dueDate <= today).length;
+    setData({
+      userName: settings.userName || '営業さん',
+      streak: gamif.streak,
+      level: gamif.level,
+      monthlyScore: gamif.monthlyScore,
+      hotCount:   results.filter(r => r.temperature === 'HOT').length,
+      warmCount:  results.filter(r => r.temperature === 'WARM').length,
+      coldCount:  results.filter(r => r.temperature === 'COLD').length,
+      totalDeals: results.length,
+      todayReminders,
+      upcomingMeetings: 2, // TODO: calendar integration
+      urgentDeals: results.filter(r => r.temperature === 'HOT').length,
+      recentResults: results.slice(0, 3),
+      usageCount: 0,
+      quote: DAILY_QUOTES[new Date().getDay() % DAILY_QUOTES.length],
     });
-  };
+  }, []);
 
-  useEffect(() => {
-    if (state === 'recording') {
-      pulseScale.value = withRepeat(
-        withSequence(withTiming(1.12, { duration: 700 }), withTiming(1, { duration: 700 })),
-        -1, true
-      );
-    } else {
-      pulseScale.value = withTiming(1);
-    }
-  }, [state]);
+  useFocusEffect(useCallback(() => { load(); }, [load]));
 
-  const handlePress = useCallback(async () => {
-    if (state === 'recording') {
-      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      await handleStop();
-      return;
-    }
-    if (state === 'processing') return;
+  const onRefresh = async () => { setRefreshing(true); await load(); setRefreshing(false); };
 
-    if (!isProUser && usageCount >= FREE_TIER_LIMIT) {
-      router.push('/paywall');
-      return;
-    }
-
-    const settings = await getSettings();
-    if (!settings.anthropicApiKey) {
-      Alert.alert('APIキー未設定', '「設定」タブでAnthropicのAPIキーを入力してください。');
-      return;
-    }
-
-    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    try {
-      await startRecording();
-      setStatusText('🔴 録音中...');
-    } catch (e: any) {
-      Alert.alert('エラー', e.message);
-    }
-  }, [state, isProUser, usageCount]);
-
-  const handleStop = useCallback(async () => {
-    setStatusText('');
-    try {
-      const uri = await stopRecording();
-      if (!uri) return;
-
-      const settings = await getSettings();
-
-      setStatusText('🎤 文字起こし中...');
-      let transcript = '';
-
-      if (settings.openaiApiKey) {
-        transcript = await transcribeAudio(uri, settings.openaiApiKey);
-      } else {
-        await new Promise<void>(resolve => {
-          Alert.prompt(
-            '手動入力',
-            'OpenAI APIキーが未設定のため商談内容を入力してください。',
-            [
-              { text: 'キャンセル', onPress: () => resolve(), style: 'cancel' },
-              { text: 'OK', onPress: t => { transcript = t ?? ''; resolve(); } },
-            ],
-            'plain-text'
-          );
-        });
-      }
-
-      if (!transcript.trim()) { setStatusText(''); reset(); return; }
-
-      setStatusText('🤖 AIが分析中...');
-      const analysis = await analyzeTranscript(transcript, settings.anthropicApiKey);
-
-      const newCount = await incrementUsage();
-      setUsageCount(newCount);
-
-      const result = {
-        id: Date.now().toString(),
-        date: new Date().toISOString(),
-        transcript,
-        duration,
-        customerId: selectedCustomer?.id,
-        customerName: selectedCustomer?.name,
-        ...analysis,
-      };
-
-      await saveResult(result);
-
-      if (selectedCustomer) {
-        await updateCustomerTemperature(selectedCustomer.id, analysis.temperature);
-      }
-
-      setStatusText('');
-      reset();
-      await loadData();
-
-      router.push({ pathname: '/results', params: { id: result.id } });
-    } catch (e: any) {
-      setStatusText('');
-      Alert.alert('エラー', e.message);
-      reset();
-    }
-  }, [duration, selectedCustomer]);
-
-  const isRecording = state === 'recording';
-  const isDisabled = state === 'processing';
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? 'おはようございます！' : hour < 17 ? 'こんにちは！' : 'お疲れ様です！';
+  const dateStr = new Date().toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'short' });
 
   return (
-    <ScrollView contentContainerStyle={styles.container} bounces={false}>
-      {/* Date & usage */}
-      <View style={styles.topRow}>
-        <Text style={styles.date}>
-          {new Date().toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'short' })}
-        </Text>
-        <UsageBadge used={usageCount} isProUser={isProUser} />
-      </View>
-
-      {/* Pipeline dashboard */}
-      {stats.total > 0 && (
-        <View style={styles.dashboard}>
-          <Text style={styles.dashTitle}>パイプライン</Text>
-          <View style={styles.dashRow}>
-            <View style={[styles.dashCard, styles.dashHot]}>
-              <Text style={styles.dashNum}>{stats.hot}</Text>
-              <Text style={styles.dashLabel}>🔥 HOT</Text>
-            </View>
-            <View style={[styles.dashCard, styles.dashWarm]}>
-              <Text style={styles.dashNum}>{stats.warm}</Text>
-              <Text style={styles.dashLabel}>☀️ WARM</Text>
-            </View>
-            <View style={[styles.dashCard, styles.dashCold]}>
-              <Text style={styles.dashNum}>{stats.cold}</Text>
-              <Text style={styles.dashLabel}>❄️ COLD</Text>
-            </View>
-            <View style={styles.dashCard}>
-              <Text style={styles.dashNum}>{stats.total}</Text>
-              <Text style={styles.dashLabel}>合計</Text>
+    <ScrollView
+      style={styles.scroll}
+      contentContainerStyle={styles.container}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.gold} />}
+      showsVerticalScrollIndicator={false}
+    >
+      {/* ── Hero ── */}
+      <LinearGradient colors={Gradients.hero} style={styles.hero} start={{ x: 0, y: 0 }} end={{ x: 0.5, y: 1 }}>
+        <View style={styles.heroOverlay} />
+        {/* Top row */}
+        <View style={styles.heroTop}>
+          <View>
+            <Text style={styles.heroGreeting}>{greeting}</Text>
+            <Text style={styles.heroHeadline}>今日も{'\n'}一歩前へ。</Text>
+            <Text style={styles.heroSub}>小さな行動の積み重ねが、{'\n'}未来の大きな成果につながる。</Text>
+          </View>
+          <View style={styles.heroRight}>
+            <UsageBadge used={data.usageCount} isProUser={isProUser} />
+            <View style={styles.levelBadge}>
+              <LinearGradient colors={Gradients.gold} style={styles.levelGrad}>
+                <Text style={styles.levelText}>Lv.{data.level}</Text>
+              </LinearGradient>
             </View>
           </View>
         </View>
-      )}
+        <Text style={styles.heroDate}>{dateStr}</Text>
+      </LinearGradient>
 
-      {/* Customer selector */}
-      <TouchableOpacity
-        style={styles.customerSelector}
-        onPress={() => setShowCustomerPicker(true)}
-        disabled={isRecording || isDisabled}
-        activeOpacity={0.7}
-      >
-        <Text style={styles.customerSelectorIcon}>👤</Text>
-        <Text style={[styles.customerSelectorText, !selectedCustomer && styles.placeholder]}>
-          {selectedCustomer ? `${selectedCustomer.name}（${selectedCustomer.company}）` : 'お客様を選択（任意）'}
-        </Text>
-        {selectedCustomer && (
-          <TouchableOpacity onPress={() => setSelectedCustomer(null)} hitSlop={12}>
-            <Text style={styles.clearBtn}>✕</Text>
+      <View style={styles.body}>
+        {/* ── Today Stats ── */}
+        <View style={styles.statsRow}>
+          <TouchableOpacity style={styles.statCard} onPress={() => router.push('/reminders')}>
+            <Text style={styles.statIcon}>📞</Text>
+            <Text style={[styles.statNum, { color: Colors.cold }]}>{data.todayReminders}</Text>
+            <Text style={styles.statLbl}>フォロー</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.statCard}>
+            <Text style={styles.statIcon}>🤝</Text>
+            <Text style={[styles.statNum, { color: Colors.gold }]}>{data.upcomingMeetings}</Text>
+            <Text style={styles.statLbl}>商談予定</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.statCard} onPress={() => router.push('/pipeline')}>
+            <Text style={styles.statIcon}>⚡</Text>
+            <Text style={[styles.statNum, { color: Colors.hot }]}>{data.urgentDeals}</Text>
+            <Text style={styles.statLbl}>HOT案件</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.statCard} onPress={() => router.push('/(tabs)/customers')}>
+            <Text style={styles.statIcon}>👥</Text>
+            <Text style={[styles.statNum, { color: Colors.won }]}>{data.totalDeals}</Text>
+            <Text style={styles.statLbl}>商談数</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* ── Today's Quote ── */}
+        <LinearGradient colors={['rgba(200,168,75,0.1)', 'rgba(200,168,75,0.03)']} style={styles.quoteCard}>
+          <Text style={styles.quoteMarks}>"</Text>
+          <Text style={styles.quoteText}>{data.quote}</Text>
+        </LinearGradient>
+
+        {/* ── Streak + Score ── */}
+        <View style={styles.gamifRow}>
+          <View style={[styles.gamifCard, { flex: 1 }]}>
+            <Text style={styles.gamifIcon}>🔥</Text>
+            <View>
+              <Text style={styles.streakNum}>{data.streak}</Text>
+              <Text style={styles.gamifLbl}>継続記録（日）</Text>
+            </View>
+          </View>
+          <View style={[styles.gamifCard, { flex: 1 }]}>
+            <Text style={styles.gamifIcon}>📊</Text>
+            <View>
+              <Text style={styles.scoreNum}>{data.monthlyScore}%</Text>
+              <Text style={styles.gamifLbl}>今月の活動スコア</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* ── Pipeline mini ── */}
+        {data.totalDeals > 0 && (
+          <TouchableOpacity onPress={() => router.push('/pipeline')} activeOpacity={0.8}>
+            <View style={styles.pipelineCard}>
+              <View style={styles.pipelineHeader}>
+                <Text style={styles.pipelineTitle}>パイプライン</Text>
+                <Text style={styles.pipelineArrow}>›</Text>
+              </View>
+              <View style={styles.pipelineRow}>
+                <View style={[styles.pipelineStat, { borderColor: Colors.hot + '44' }]}>
+                  <Text style={[styles.pipelineNum, { color: Colors.hot }]}>{data.hotCount}</Text>
+                  <Text style={styles.pipelineLbl}>🔥 HOT</Text>
+                </View>
+                <View style={[styles.pipelineStat, { borderColor: Colors.warm + '44' }]}>
+                  <Text style={[styles.pipelineNum, { color: Colors.warm }]}>{data.warmCount}</Text>
+                  <Text style={styles.pipelineLbl}>☀️ WARM</Text>
+                </View>
+                <View style={[styles.pipelineStat, { borderColor: Colors.cold + '44' }]}>
+                  <Text style={[styles.pipelineNum, { color: Colors.cold }]}>{data.coldCount}</Text>
+                  <Text style={styles.pipelineLbl}>❄️ COLD</Text>
+                </View>
+              </View>
+            </View>
           </TouchableOpacity>
         )}
-      </TouchableOpacity>
 
-      {/* Record button */}
-      <View style={styles.recordArea}>
-        <Text style={styles.instruction}>
-          {isRecording ? '商談が終わったら停止してください' : '録音ボタンで商談を記録'}
-        </Text>
-
-        <Animated.View style={pulseStyle}>
-          <TouchableOpacity
-            style={[styles.recordBtn, isRecording && styles.recordBtnActive]}
-            onPress={handlePress}
-            disabled={isDisabled}
-            activeOpacity={0.85}
-          >
-            {isDisabled
-              ? <ActivityIndicator color={Colors.warmBrown} size="large" />
-              : <Text style={styles.btnIcon}>{isRecording ? '⏹' : '🎙️'}</Text>
-            }
-          </TouchableOpacity>
-        </Animated.View>
-
-        {isRecording && <Text style={styles.timer}>{formattedDuration}</Text>}
-
-        <Text style={styles.btnLabel}>
-          {isRecording ? 'タップして停止' : isDisabled ? '処理中...' : '録音開始'}
-        </Text>
-      </View>
-
-      {statusText ? (
-        <View style={styles.statusBox}>
-          <Text style={styles.statusText}>{statusText}</Text>
-        </View>
-      ) : null}
-
-      {!isProUser && usageCount >= FREE_TIER_LIMIT - 1 && (
-        <TouchableOpacity style={styles.upgradePrompt} onPress={() => router.push('/paywall')}>
-          <Text style={styles.upgradeText}>
-            {usageCount >= FREE_TIER_LIMIT
-              ? '⚠️ 今月の無料枠を使い切りました。プロプランで無制限に。'
-              : '⭐ 残り1回！プロプランで無制限に。'}
-          </Text>
-        </TouchableOpacity>
-      )}
-
-      {/* Ruled lines */}
-      <View style={styles.lines}>
-        {Array.from({ length: 6 }).map((_, i) => <View key={i} style={styles.line} />)}
-      </View>
-
-      {/* Customer picker modal */}
-      <Modal visible={showCustomerPicker} animationType="slide" presentationStyle="pageSheet">
-        <View style={styles.pickerModal}>
-          <View style={styles.pickerHeader}>
-            <TouchableOpacity onPress={() => setShowCustomerPicker(false)}>
-              <Text style={styles.pickerCancel}>キャンセル</Text>
-            </TouchableOpacity>
-            <Text style={styles.pickerTitle}>お客様を選択</Text>
-            <TouchableOpacity onPress={() => { setSelectedCustomer(null); setShowCustomerPicker(false); }}>
-              <Text style={styles.pickerClear}>選択解除</Text>
-            </TouchableOpacity>
-          </View>
-          {customers.length === 0 ? (
-            <View style={styles.pickerEmpty}>
-              <Text style={styles.pickerEmptyText}>まだ顧客が登録されていません</Text>
-              <TouchableOpacity onPress={() => { setShowCustomerPicker(false); router.push('/(tabs)/customers'); }}>
-                <Text style={styles.pickerAddLink}>顧客タブで追加する →</Text>
-              </TouchableOpacity>
-            </View>
-          ) : (
-            <FlatList
-              data={customers}
-              keyExtractor={c => c.id}
-              contentContainerStyle={{ padding: 16, gap: 8 }}
-              renderItem={({ item }) => (
+        {/* ── Recent Activity ── */}
+        {data.recentResults.length > 0 && (
+          <View style={styles.recentSection}>
+            <Text style={styles.sectionLabel}>直近の商談</Text>
+            {data.recentResults.map(r => {
+              const temp = r.temperature;
+              const d = new Date(r.date);
+              const ds = d.toLocaleDateString('ja-JP', { month: 'short', day: 'numeric' });
+              return (
                 <TouchableOpacity
-                  style={[styles.pickerItem, selectedCustomer?.id === item.id && styles.pickerItemSelected]}
-                  onPress={() => { setSelectedCustomer(item); setShowCustomerPicker(false); }}
+                  key={r.id}
+                  style={styles.recentItem}
+                  onPress={() => router.push({ pathname: '/results', params: { id: r.id } })}
+                  activeOpacity={0.7}
                 >
-                  <View style={styles.pickerAvatar}>
-                    <Text style={styles.pickerAvatarText}>{item.name.charAt(0)}</Text>
+                  <View style={[styles.recentDot, { backgroundColor: TEMP_COLORS[temp] }]} />
+                  <View style={styles.recentContent}>
+                    <Text style={styles.recentName}>{r.customerName ?? '顧客未設定'}</Text>
+                    <Text style={styles.recentPreview} numberOfLines={1}>
+                      {r.minutes.split('\n')[0].replace(/^[•・\-*]\s*/, '').slice(0, 35)}…
+                    </Text>
                   </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.pickerName}>{item.name}</Text>
-                    {item.company ? <Text style={styles.pickerCompany}>{item.company}</Text> : null}
+                  <View>
+                    <Text style={[styles.recentTemp, { color: TEMP_COLORS[temp] }]}>{TEMP_EMOJIS[temp]}</Text>
+                    <Text style={styles.recentDate}>{ds}</Text>
                   </View>
-                  {selectedCustomer?.id === item.id && <Text style={styles.checkmark}>✓</Text>}
                 </TouchableOpacity>
-              )}
-            />
-          )}
-        </View>
-      </Modal>
+              );
+            })}
+          </View>
+        )}
+
+        {/* ── CTA ── */}
+        <TouchableOpacity onPress={() => router.push('/record')} activeOpacity={0.85}>
+          <LinearGradient colors={Gradients.gold} style={styles.cta} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
+            <Text style={styles.ctaText}>▶ 今日をはじめる</Text>
+          </LinearGradient>
+        </TouchableOpacity>
+      </View>
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flexGrow: 1, padding: 20, gap: 16, backgroundColor: Colors.cream },
-  topRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 },
-  date: { fontSize: 13, color: Colors.warmBrown, letterSpacing: 0.3 },
-  dashboard: {
-    backgroundColor: 'rgba(255,255,255,0.55)',
-    borderRadius: 12,
-    padding: 14,
+  scroll: { flex: 1, backgroundColor: Colors.bg },
+  container: { paddingBottom: 40 },
+  hero: { paddingTop: 16, paddingHorizontal: 20, paddingBottom: 24, position: 'relative', minHeight: 200 },
+  heroOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(10,13,26,0.3)' },
+  heroTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
+  heroGreeting: { fontSize: 11, color: Colors.gold, fontWeight: '600', letterSpacing: 0.8, marginBottom: 4 },
+  heroHeadline: { fontSize: 30, fontWeight: '900', color: Colors.w100, lineHeight: 38 },
+  heroSub: { fontSize: 11, color: Colors.w40, marginTop: 8, lineHeight: 18 },
+  heroRight: { alignItems: 'flex-end', gap: 8 },
+  heroDate: { fontSize: 11, color: Colors.w40, marginTop: 12 },
+  levelBadge: { borderRadius: 20, overflow: 'hidden' },
+  levelGrad: { paddingHorizontal: 12, paddingVertical: 4 },
+  levelText: { fontSize: 11, fontWeight: '700', color: Colors.navy },
+  body: { padding: 16, gap: 14 },
+  statsRow: { flexDirection: 'row', gap: 8 },
+  statCard: {
+    flex: 1, backgroundColor: Colors.w04, borderRadius: 12,
+    borderWidth: 1, borderColor: Colors.w08,
+    padding: 10, alignItems: 'center', gap: 3,
+  },
+  statIcon: { fontSize: 16 },
+  statNum: { fontSize: 20, fontWeight: '900' },
+  statLbl: { fontSize: 9, color: Colors.w40, textAlign: 'center', lineHeight: 13 },
+  quoteCard: {
+    borderRadius: 14, padding: 16,
+    borderWidth: 1, borderColor: 'rgba(200,168,75,0.2)',
+  },
+  quoteMarks: { fontSize: 24, color: Colors.gold, opacity: 0.5, lineHeight: 20, marginBottom: 2 },
+  quoteText: { fontSize: 13, color: Colors.w60, lineHeight: 22, fontStyle: 'italic' },
+  gamifRow: { flexDirection: 'row', gap: 10 },
+  gamifCard: {
+    backgroundColor: Colors.w04, borderRadius: 14,
+    borderWidth: 1, borderColor: Colors.w08,
+    padding: 14, flexDirection: 'row', alignItems: 'center', gap: 10,
+  },
+  gamifIcon: { fontSize: 26 },
+  streakNum: { fontSize: 26, fontWeight: '900', color: Colors.streak, lineHeight: 30 },
+  scoreNum:  { fontSize: 26, fontWeight: '900', color: Colors.gold,   lineHeight: 30 },
+  gamifLbl: { fontSize: 10, color: Colors.w40, marginTop: 2 },
+  pipelineCard: {
+    backgroundColor: Colors.w04, borderRadius: 14,
+    borderWidth: 1, borderColor: Colors.w08, padding: 14, gap: 10,
+  },
+  pipelineHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  pipelineTitle: { fontSize: 12, fontWeight: '700', color: Colors.w60, letterSpacing: 0.8 },
+  pipelineArrow: { fontSize: 16, color: Colors.w40 },
+  pipelineRow: { flexDirection: 'row', gap: 8 },
+  pipelineStat: {
+    flex: 1, backgroundColor: 'rgba(255,255,255,0.03)',
+    borderRadius: 10, padding: 10, alignItems: 'center', gap: 3,
     borderWidth: 1,
-    borderColor: Colors.lineColor,
-    gap: 8,
   },
-  dashTitle: { fontSize: 12, fontWeight: '600', color: Colors.warmBrown, letterSpacing: 1 },
-  dashRow: { flexDirection: 'row', gap: 8 },
-  dashCard: {
-    flex: 1, backgroundColor: 'rgba(196,149,106,0.08)',
-    borderRadius: 8, padding: 10, alignItems: 'center', gap: 2,
-    borderWidth: 1, borderColor: Colors.lineColor,
-  },
-  dashHot: { borderColor: Colors.hot + '33', backgroundColor: Colors.hot + '08' },
-  dashWarm: { borderColor: Colors.warm + '33', backgroundColor: Colors.warm + '08' },
-  dashCold: { borderColor: Colors.cold + '33', backgroundColor: Colors.cold + '08' },
-  dashNum: { fontSize: 22, fontWeight: '700', color: Colors.darkBrown },
-  dashLabel: { fontSize: 10, color: Colors.warmBrown },
-  customerSelector: {
+  pipelineNum: { fontSize: 22, fontWeight: '900' },
+  pipelineLbl: { fontSize: 9, color: Colors.w40 },
+  recentSection: { gap: 8 },
+  sectionLabel: { fontSize: 11, fontWeight: '700', color: Colors.w40, letterSpacing: 0.8 },
+  recentItem: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
-    backgroundColor: 'rgba(255,255,255,0.55)',
-    borderRadius: 10, padding: 12,
-    borderWidth: 1, borderColor: Colors.lineColor,
+    backgroundColor: Colors.w04, borderRadius: 12,
+    borderWidth: 1, borderColor: Colors.w08, padding: 12,
   },
-  customerSelectorIcon: { fontSize: 18 },
-  customerSelectorText: { flex: 1, fontSize: 14, color: Colors.ink },
-  placeholder: { color: Colors.lightBrown },
-  clearBtn: { fontSize: 14, color: Colors.lightBrown, paddingHorizontal: 4 },
-  recordArea: { alignItems: 'center', paddingVertical: 8, gap: 14 },
-  instruction: { fontSize: 14, color: Colors.warmBrown, fontStyle: 'italic', textAlign: 'center' },
-  recordBtn: {
-    width: 120, height: 120, borderRadius: 60,
-    borderWidth: 4, borderColor: Colors.warmBrown,
-    backgroundColor: Colors.cream,
-    alignItems: 'center', justifyContent: 'center',
-    shadowColor: Colors.darkBrown, shadowOpacity: 0.2,
-    shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 6,
+  recentDot: { width: 10, height: 10, borderRadius: 5 },
+  recentContent: { flex: 1 },
+  recentName: { fontSize: 12, fontWeight: '600', color: Colors.w100 },
+  recentPreview: { fontSize: 10, color: Colors.w40, marginTop: 2 },
+  recentTemp: { fontSize: 16, textAlign: 'right' },
+  recentDate: { fontSize: 9, color: Colors.w40, marginTop: 2, textAlign: 'right' },
+  cta: {
+    borderRadius: 16, paddingVertical: 18, alignItems: 'center',
+    shadowColor: Colors.gold, shadowOpacity: 0.4, shadowRadius: 16, shadowOffset: { width: 0, height: 4 }, elevation: 6,
   },
-  recordBtnActive: {
-    borderColor: Colors.hot, shadowColor: Colors.hot, shadowOpacity: 0.4,
-  },
-  btnIcon: { fontSize: 48 },
-  timer: { fontSize: 28, fontWeight: '700', color: Colors.hot, letterSpacing: 4 },
-  btnLabel: { fontSize: 14, fontWeight: '500', color: Colors.ink, letterSpacing: 0.5 },
-  statusBox: {
-    backgroundColor: 'rgba(139,94,60,0.08)', borderRadius: 8,
-    padding: 12, alignItems: 'center',
-  },
-  statusText: { fontSize: 14, color: Colors.warmBrown, fontStyle: 'italic' },
-  upgradePrompt: {
-    backgroundColor: 'rgba(192,57,43,0.08)', borderRadius: 8, padding: 14,
-    borderWidth: 1, borderColor: 'rgba(192,57,43,0.2)',
-  },
-  upgradeText: { fontSize: 13, color: Colors.hot, textAlign: 'center', lineHeight: 20 },
-  lines: { gap: 0, marginTop: 4 },
-  line: { height: 1, backgroundColor: Colors.lineColor, marginBottom: 31 },
-  pickerModal: { flex: 1, backgroundColor: Colors.cream },
-  pickerHeader: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    padding: 16, paddingTop: 20,
-    borderBottomWidth: 1, borderBottomColor: Colors.lineColor,
-  },
-  pickerCancel: { fontSize: 15, color: Colors.warmBrown },
-  pickerTitle: { fontSize: 17, fontWeight: '700', color: Colors.darkBrown },
-  pickerClear: { fontSize: 13, color: Colors.lightBrown },
-  pickerEmpty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
-  pickerEmptyText: { fontSize: 15, color: Colors.warmBrown },
-  pickerAddLink: { fontSize: 14, color: Colors.warmBrown, textDecorationLine: 'underline' },
-  pickerItem: {
-    flexDirection: 'row', alignItems: 'center', gap: 12,
-    backgroundColor: 'rgba(255,255,255,0.55)',
-    borderRadius: 10, padding: 14, borderWidth: 1, borderColor: Colors.lineColor,
-  },
-  pickerItemSelected: { borderColor: Colors.warmBrown, backgroundColor: 'rgba(139,94,60,0.06)' },
-  pickerAvatar: {
-    width: 42, height: 42, borderRadius: 21,
-    backgroundColor: Colors.lightBrown, alignItems: 'center', justifyContent: 'center',
-  },
-  pickerAvatarText: { fontSize: 18, color: Colors.cream, fontWeight: '700' },
-  pickerName: { fontSize: 15, fontWeight: '600', color: Colors.ink },
-  pickerCompany: { fontSize: 12, color: Colors.warmBrown },
-  checkmark: { fontSize: 18, color: Colors.warmBrown, fontWeight: '700' },
+  ctaText: { fontSize: 16, fontWeight: '900', color: Colors.navy, letterSpacing: 0.5 },
 });
