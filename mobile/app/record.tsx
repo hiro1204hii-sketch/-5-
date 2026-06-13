@@ -6,6 +6,7 @@ import {
 import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
+import * as DocumentPicker from 'expo-document-picker';
 import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
 import { useRecording } from '../hooks/useRecording';
 import { useSubscription } from '../hooks/useSubscription';
@@ -61,10 +62,22 @@ export default function RecordScreen() {
     try {
       const uri = await stopRecording();
       if (!uri) return;
-      const s = await getSettings();
+      await processAudio(uri, duration);
+      reset();
+    } catch (e: any) {
+      setStatus(''); Alert.alert('エラー', e.message); reset();
+    }
+  }, [duration, processAudio]);
 
-      setStatus('🎤 文字起こし中…');
-      let transcript = '';
+  // Process a given audio URI (shared by handleStop + handleImport)
+  const processAudio = useCallback(async (uri: string, fileDuration: number) => {
+    const s = await getSettings();
+    if (!s.anthropicApiKey) { Alert.alert('APIキー未設定', '設定からAnthropicのAPIキーを入力してください。'); return; }
+    if (!isProUser && usageCount >= FREE_TIER_LIMIT) { router.push('/paywall'); return; }
+
+    setStatus('🎤 文字起こし中…');
+    let transcript = '';
+    try {
       if (s.openaiApiKey) {
         transcript = await transcribeAudio(uri, s.openaiApiKey);
       } else {
@@ -75,7 +88,7 @@ export default function RecordScreen() {
           ], 'plain-text');
         });
       }
-      if (!transcript.trim()) { reset(); return; }
+      if (!transcript.trim()) { setStatus(''); return; }
 
       setStatus('🤖 AIが分析中…');
       const analysis = await analyzeTranscript(transcript, s.anthropicApiKey);
@@ -84,7 +97,8 @@ export default function RecordScreen() {
 
       const result = {
         id: Date.now().toString(), date: new Date().toISOString(),
-        transcript, duration, customerId: selected?.id, customerName: selected?.name, ...analysis,
+        transcript, duration: fileDuration,
+        customerId: selected?.id, customerName: selected?.name, ...analysis,
       };
       await saveResult(result);
       if (selected) await updateCustomerTemperature(selected.id, analysis.temperature);
@@ -95,12 +109,26 @@ export default function RecordScreen() {
         temperature: analysis.temperature, analysisId: result.id,
       });
 
-      setStatus(''); reset();
+      setStatus('');
       router.replace({ pathname: '/results', params: { id: result.id } });
     } catch (e: any) {
-      setStatus(''); Alert.alert('エラー', e.message); reset();
+      setStatus(''); Alert.alert('エラー', e.message);
     }
-  }, [duration, selected]);
+  }, [isProUser, usageCount, selected]);
+
+  const handleImport = useCallback(async () => {
+    try {
+      const res = await DocumentPicker.getDocumentAsync({
+        type: ['audio/*', 'public.audio'],
+        copyToCacheDirectory: true,
+      });
+      if (res.canceled || !res.assets?.[0]) return;
+      const { uri } = res.assets[0];
+      await processAudio(uri, 0);
+    } catch (e: any) {
+      Alert.alert('エラー', e.message);
+    }
+  }, [processAudio]);
 
   const isRec = state === 'recording';
   const isProc = state === 'processing';
@@ -178,6 +206,17 @@ export default function RecordScreen() {
             <Text style={styles.statusText}>{status}</Text>
           </View>
         ) : null}
+
+        {/* Import from files */}
+        {!isRec && !isProc && (
+          <TouchableOpacity style={styles.importBtn} onPress={handleImport} activeOpacity={0.8}>
+            <Text style={styles.importIcon}>📂</Text>
+            <View>
+              <Text style={styles.importLabel}>録音ファイルから取り込む</Text>
+              <Text style={styles.importSub}>ボイスメモ・録音アプリのファイルを使用</Text>
+            </View>
+          </TouchableOpacity>
+        )}
 
         {!isProUser && usageCount >= FREE_TIER_LIMIT - 1 && (
           <TouchableOpacity style={styles.upgradeBanner} onPress={() => router.push('/paywall')}>
@@ -287,4 +326,12 @@ const styles = S({
   pickerName: { fontSize: 15, fontWeight: '600', color: Colors.w100 },
   pickerCompany: { fontSize: 11, color: Colors.w40, marginTop: 1 },
   checkmark: { fontSize: 18, color: Colors.gold, fontWeight: '700' },
+  importBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    backgroundColor: Colors.w04, borderRadius: 14, padding: 16,
+    borderWidth: 1, borderColor: Colors.w08,
+  },
+  importIcon: { fontSize: 28 },
+  importLabel: { fontSize: 14, fontWeight: '600', color: Colors.w100 },
+  importSub: { fontSize: 11, color: Colors.w40, marginTop: 2 },
 });
