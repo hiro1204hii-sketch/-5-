@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { api, Property, Equipment, Option, Meta, yen, yenSigned, num } from '../api';
+import { api, Property, Equipment, Option, Meta, WorkItem, yen, yenSigned, num } from '../api';
 import { PageHeader, Empty } from '../components/ui';
 
 interface SpecDetail { id: number; name: string; items: { category: string; equipment_id: number | null }[]; }
@@ -18,6 +18,8 @@ export default function EstimateCreate() {
   const [grade, setGrade] = useState('standard');
   const [eqSel, setEqSel] = useState<Record<string, number>>({});
   const [optSel, setOptSel] = useState<number[]>([]);
+  const [qtyItems, setQtyItems] = useState<WorkItem[]>([]);
+  const [manualQty, setManualQty] = useState<Record<number, number>>({});
   const [result, setResult] = useState<any>(null);
   const [name, setName] = useState('');
 
@@ -27,6 +29,10 @@ export default function EstimateCreate() {
     api.get<Equipment[]>('/equipment').then(setEquipment);
     api.get<Option[]>('/options').then(setOptions);
     api.get<Meta>('/meta').then(setMeta);
+    // 数量×単価 / 手入力補正 の工事項目は数量入力が必要
+    api.get<WorkItem[]>('/work-items').then((items) =>
+      setQtyItems(items.filter((i) => i.level === 3 && ['quantity', 'manual'].includes(i.calc_method)))
+    );
   }, []);
 
   // 標準仕様セット選択時：カテゴリ別の標準住設を自動セット
@@ -42,9 +48,9 @@ export default function EstimateCreate() {
   // 入力変化のたびに概算を再計算（保存しない）
   useEffect(() => {
     if (!propertyId) { setResult(null); return; }
-    api.post('/estimates/calculate', { property_id: propertyId, spec_set_id: specSetId, equipment: eqSel, options: optSel, grade })
+    api.post('/estimates/calculate', { property_id: propertyId, spec_set_id: specSetId, equipment: eqSel, options: optSel, grade, manualQty })
       .then(setResult).catch(() => setResult(null));
-  }, [propertyId, specSetId, eqSel, optSel, grade]);
+  }, [propertyId, specSetId, eqSel, optSel, grade, manualQty]);
 
   const categories = Object.keys(eqSel).length ? Object.keys(eqSel) : (result?.equipmentLines || []).map((e: any) => e.category);
   const eqByCat = (c: string) => equipment.filter((e) => e.category === c);
@@ -53,7 +59,7 @@ export default function EstimateCreate() {
 
   const save = async () => {
     if (!propertyId) return;
-    const r = await api.post<{ id: number }>('/estimates', { property_id: propertyId, spec_set_id: specSetId, equipment: eqSel, options: optSel, grade, name });
+    const r = await api.post<{ id: number }>('/estimates', { property_id: propertyId, spec_set_id: specSetId, equipment: eqSel, options: optSel, grade, manualQty, name });
     nav(`/estimates/${r.id}`);
   };
 
@@ -127,6 +133,27 @@ export default function EstimateCreate() {
               ))}
             </div>
           </div>
+
+          {qtyItems.length > 0 && (
+            <div className="card p-5">
+              <h2 className="mb-3 text-sm font-semibold text-slate-700">④ 数量入力（数量 × 単価 の項目）</h2>
+              <div className="space-y-3">
+                {qtyItems.map((it) => (
+                  <div key={it.id} className="flex items-center gap-3">
+                    <span className="flex-1 text-sm text-slate-600">{it.name}</span>
+                    <input
+                      type="number"
+                      className="input w-28 text-right"
+                      placeholder="0"
+                      value={manualQty[it.id] ?? ''}
+                      onChange={(e) => setManualQty((q) => ({ ...q, [it.id]: e.target.value === '' ? 0 : +e.target.value }))}
+                    />
+                    <span className="w-8 text-xs text-slate-400">{it.unit}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* 結果 */}
