@@ -1,0 +1,721 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>住宅概算・原価管理システム</title>
+<style>
+  :root{
+    --brand:#2563eb; --brand-d:#1d4ed8; --brand-l:#eff4ff;
+    --ink:#0f172a; --muted:#64748b; --line:#e2e8f0; --bg:#f1f5f9; --card:#fff;
+    --ok:#059669; --okbg:#ecfdf5; --warn:#d97706; --warnbg:#fffbeb; --red:#dc2626; --redbg:#fef2f2;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:"Hiragino Kaku Gothic ProN","Noto Sans JP",system-ui,sans-serif;background:var(--bg);color:var(--ink);font-size:14px}
+  a{color:inherit}
+  .app{display:flex;min-height:100vh}
+  /* sidebar */
+  .side{position:fixed;left:0;top:0;width:236px;height:100vh;background:#fff;border-right:1px solid var(--line);display:flex;flex-direction:column;z-index:20}
+  .brand{display:flex;gap:10px;align-items:center;padding:16px 18px}
+  .brand .logo{width:36px;height:36px;border-radius:9px;background:var(--brand);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:18px}
+  .brand b{font-size:14px}.brand small{display:block;color:#94a3b8;font-size:10px;font-weight:400}
+  .nav{flex:1;overflow:auto;padding:6px 10px}
+  .nav .sec{padding:14px 10px 4px;font-size:10px;letter-spacing:.08em;color:#94a3b8;font-weight:700}
+  .nav a{display:flex;gap:10px;align-items:center;padding:8px 10px;border-radius:9px;color:#475569;font-weight:600;text-decoration:none;cursor:pointer;font-size:13px}
+  .nav a .ic{width:20px;text-align:center}
+  .nav a:hover{background:#f1f5f9}
+  .nav a.on{background:var(--brand-l);color:var(--brand-d)}
+  .side .foot{border-top:1px solid #f1f5f9;padding:10px 18px;color:#94a3b8;font-size:10px}
+  /* main */
+  .main{margin-left:236px;flex:1;min-width:0}
+  .wrap{max-width:1160px;margin:0 auto;padding:26px 30px}
+  .head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:20px}
+  .head h1{font-size:20px;margin:0}
+  .head p{margin:5px 0 0;color:var(--muted);font-size:13px;max-width:760px}
+  /* ui bits */
+  .btn{display:inline-flex;align-items:center;gap:6px;border:0;border-radius:8px;padding:9px 14px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit}
+  .btn.pri{background:var(--brand);color:#fff}.btn.pri:hover{background:var(--brand-d)}
+  .btn.gh{background:#fff;border:1px solid var(--line);color:#334155}.btn.gh:hover{background:#f8fafc}
+  .btn.dn{background:#fff;border:1px solid #fecaca;color:var(--red)}.btn.dn:hover{background:var(--redbg)}
+  .btn.sm{padding:5px 10px;font-size:12px}
+  .lnk{color:var(--brand-d);cursor:pointer;font-weight:600;font-size:12px}
+  .lnk:hover{text-decoration:underline}
+  .lnk.red{color:var(--red)}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;box-shadow:0 1px 2px rgba(0,0,0,.03)}
+  .card .ct{padding:12px 18px;border-bottom:1px solid #f1f5f9;font-weight:700;font-size:13px;display:flex;justify-content:space-between;align-items:center}
+  .pad{padding:18px}
+  table{width:100%;border-collapse:collapse}
+  th{text-align:left;font-size:11px;color:var(--muted);font-weight:700;padding:10px 12px;background:#f8fafc;border-bottom:1px solid var(--line);white-space:nowrap}
+  td{padding:10px 12px;border-bottom:1px solid #f1f5f9;font-size:13px;white-space:nowrap}
+  tr:hover td{background:#fafcff}
+  tfoot td{background:#f8fafc;font-weight:700}
+  .r{text-align:right}.c{text-align:center}.mut{color:var(--muted)}
+  .badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700}
+  .b-gray{background:#f1f5f9;color:#475569}.b-blue{background:var(--brand-l);color:var(--brand-d)}
+  .b-ok{background:var(--okbg);color:var(--ok)}.b-warn{background:var(--warnbg);color:var(--warn)}
+  .b-red{background:var(--redbg);color:var(--red)}.b-vio{background:#f5f3ff;color:#7c3aed}.b-sky{background:#e0f2fe;color:#0369a1}
+  input,select,textarea{width:100%;border:1px solid #cbd5e1;border-radius:8px;padding:8px 10px;font-size:13px;font-family:inherit;background:#fff;outline:none}
+  input:focus,select:focus,textarea:focus{border-color:var(--brand);box-shadow:0 0 0 3px var(--brand-l)}
+  label.f{display:block}
+  label.f span{display:block;font-size:11px;color:var(--muted);font-weight:600;margin-bottom:4px}
+  .grid{display:grid;gap:12px}
+  .stat{background:#fff;border:1px solid var(--line);border-radius:12px;padding:16px 18px}
+  .stat .k{font-size:12px;color:var(--muted);font-weight:600}
+  .stat .v{font-size:28px;font-weight:800;margin-top:4px}
+  .stat .s{font-size:11px;color:#94a3b8;margin-top:2px}
+  .empty{padding:40px;text-align:center;color:#94a3b8;font-size:13px}
+  /* modal */
+  .ov{position:fixed;inset:0;background:rgba(15,23,42,.45);display:flex;align-items:flex-start;justify-content:center;padding:60px 16px;z-index:40}
+  .modal{background:#fff;border-radius:14px;width:100%;max-width:560px;max-height:86vh;overflow:auto}
+  .modal.wide{max-width:820px}
+  .modal .mt{display:flex;justify-content:space-between;align-items:center;padding:14px 20px;border-bottom:1px solid #f1f5f9}
+  .modal .mt b{font-size:15px}.modal .x{cursor:pointer;color:#94a3b8;font-size:18px;border:0;background:none}
+  .chip{display:inline-flex;align-items:center;gap:4px;padding:5px 11px;border-radius:999px;border:1px solid var(--line);background:#fff;color:#475569;font-size:12px;font-weight:600;cursor:pointer}
+  .chip.on{background:var(--brand);color:#fff;border-color:var(--brand)}
+  .opt{cursor:pointer;border:1px solid var(--line);background:#fff;color:#475569;border-radius:999px;padding:5px 11px;font-size:12px;font-weight:600}
+  .opt.on{border-color:var(--brand);background:var(--brand-l);color:var(--brand-d)}
+  .note{background:var(--warnbg);color:#92400e;border-radius:8px;padding:9px 12px;font-size:12px}
+  .scroll{max-height:380px;overflow:auto}
+  @media(max-width:880px){.side{transform:translateX(-100%);transition:.2s}.side.open{transform:none}.main{margin-left:0}.menubtn{display:inline-flex!important}}
+  .menubtn{display:none}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="side" id="side">
+    <div class="brand"><div class="logo">概</div><div><b>住宅概算・原価管理</b><small>スタンドアロン版 / Phase1</small></div></div>
+    <nav class="nav" id="nav"></nav>
+    <div class="foot">目的: 概算精度の継続的向上<br>データはこのブラウザに保存されます</div>
+  </aside>
+  <main class="main">
+    <div class="wrap">
+      <button class="btn gh sm menubtn" onclick="document.getElementById('side').classList.toggle('open')" style="margin-bottom:12px">☰ メニュー</button>
+      <div id="view"></div>
+    </div>
+  </main>
+</div>
+<div id="modal-root"></div>
+
+<script>
+/* =========================================================================
+   住宅概算・原価管理システム  — スタンドアロン(1ファイル)版
+   データはブラウザの localStorage に保存。サーバー不要。
+   ========================================================================= */
+const LS_KEY = 'hes_standalone_v1';
+const yen = n => '¥' + Math.round(Number(n||0)).toLocaleString('ja-JP');
+const yens = n => (n>=0?'+':'−') + '¥' + Math.abs(Math.round(n)).toLocaleString('ja-JP');
+const num = n => Number(n||0).toLocaleString('ja-JP');
+const esc = s => String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const uid = (()=>{let i=Date.now();return ()=>++i})();
+const todayISO = ()=>new Date().toISOString();
+const dAgo = n => new Date(Date.now()-n*864e5).toISOString();
+
+const CALC = {
+  floor_area:'延床面積 × 単価', building_area:'建築面積 × 単価', quantity:'数量 × 単価',
+  lump_sum:'一式', room_factor:'部屋数 × 単価', floor_factor:'階数係数',
+  sw_factor:'SW係数', gx_factor:'GX係数', grade_factor:'グレード係数', manual:'手入力補正'
+};
+const GRADES = [{k:'standard',l:'標準'},{k:'high',l:'上位'},{k:'premium',l:'最上位'}];
+const CATS = ['キッチン','浴室','洗面','トイレ','給湯器','換気','エアコン','建具','フローリング','外壁','屋根'];
+
+/* ---------------- seed ---------------- */
+function seed(){
+  const coefficients = [
+    {type:'room',key:'3',value:.95},{type:'room',key:'4',value:1},{type:'room',key:'5',value:1.06},{type:'room',key:'6',value:1.12},
+    {type:'floor',key:'1',value:.92},{type:'floor',key:'2',value:1},{type:'floor',key:'3',value:1.15},
+    {type:'sw',key:'on',value:1.12},{type:'sw',key:'off',value:1},
+    {type:'gx',key:'on',value:1.08},{type:'gx',key:'off',value:1},
+    {type:'grade',key:'standard',value:1},{type:'grade',key:'high',value:1.15},{type:'grade',key:'premium',value:1.3},
+  ];
+  const groups = [
+    ['仮設工事',[['仮設足場','㎡',1200,950,'floor_area'],['養生・clean','式',80000,60000,'lump_sum']]],
+    ['基礎工事',[['ベタ基礎','㎡',28000,22000,'building_area'],['地盤改良','式',600000,480000,'lump_sum']]],
+    ['木工事',[['構造材・建方','㎡',42000,33000,'sw_factor'],['造作工事','㎡',18000,14000,'floor_area']]],
+    ['屋根工事',[['ガルバリウム屋根','㎡',9500,7200,'building_area']]],
+    ['外壁工事',[['窯業系サイディング','㎡',11000,8500,'floor_area']]],
+    ['防水工事',[['バルコニー防水','式',120000,90000,'lump_sum']]],
+    ['建具工事',[['内部建具','室',65000,50000,'room_factor'],['サッシ・玄関ドア','式',850000,660000,'lump_sum']]],
+    ['内装工事',[['クロス工事','㎡',1500,1100,'floor_area'],['フローリング','㎡',8500,6500,'grade_factor']]],
+    ['電気工事',[['電気配線・器具','㎡',6500,5000,'floor_area']]],
+    ['給排水工事',[['給排水衛生設備','式',950000,740000,'lump_sum']]],
+    ['設備工事',[['空調・換気設備','㎡',5000,3900,'gx_factor']]],
+    ['外構工事',[['外構・造園','㎡',12000,9000,'quantity']]],
+    ['諸経費',[['現場管理費','㎡',7000,7000,'floor_area'],['一般管理費','式',800000,800000,'lump_sum']]],
+  ];
+  const workItems=[]; let so=0;
+  groups.forEach(([gname,leaves])=>{
+    const pid=uid(); workItems.push({id:pid,parent_id:null,level:1,name:gname,sort:so++});
+    leaves.forEach(([name,unit,price,cost,calc])=>workItems.push({id:uid(),parent_id:pid,level:3,name,unit,standard_price:price,cost,calc_method:calc,note:'',updated_at:todayISO()}));
+  });
+  const priceHistory=[];
+  workItems.filter(w=>w.level===3).slice(0,8).forEach(it=>{
+    const o=Math.round(it.standard_price*.9), oc=Math.round(it.cost*.9);
+    priceHistory.push({id:uid(),work_item_id:it.id,name:it.name,old_price:o,new_price:it.standard_price,old_cost:oc,new_cost:it.cost,reason:'資材価格高騰による改定',changed_at:dAgo(40)});
+  });
+  const E=(category,maker,product_name,grade,is_standard,list_price,cost,sale_price,install_cost)=>({id:uid(),category,maker,product_name,grade,is_standard,list_price,cost,sale_price,install_cost,note:''});
+  const equipment=[
+    E('キッチン','LIXIL','シエラS','standard',1,950000,520000,800000,80000),
+    E('キッチン','Panasonic','ラクシーナ','high',0,1300000,720000,1100000,90000),
+    E('キッチン','クリナップ','STEDIA','premium',0,1800000,1000000,1500000,100000),
+    E('浴室','TOTO','サザナ','standard',1,900000,480000,720000,120000),
+    E('浴室','LIXIL','スパージュ','premium',0,1500000,820000,1250000,130000),
+    E('洗面','LIXIL','ピアラ','standard',1,180000,95000,150000,30000),
+    E('洗面','Panasonic','シーライン','high',0,280000,150000,230000,32000),
+    E('トイレ','TOTO','ピュアレストQR','standard',1,150000,80000,125000,25000),
+    E('トイレ','TOTO','ネオレスト','premium',0,400000,230000,360000,28000),
+    E('給湯器','リンナイ','エコジョーズ','standard',1,250000,140000,210000,20000),
+    E('給湯器','ダイキン','エコキュート','high',0,600000,360000,520000,40000),
+    E('換気','Panasonic','第1種熱交換換気','standard',1,350000,200000,300000,50000),
+    E('エアコン','ダイキン','壁掛けエアコン','standard',1,150000,90000,130000,20000),
+    E('建具','LIXIL','ラシッサD','standard',1,0,0,0,0),
+    E('フローリング','朝日ウッドテック','挽板フローリング','standard',1,0,0,0,0),
+    E('外壁','ニチハ','Fu-ge','standard',1,0,0,0,0),
+    E('屋根','ニチハ','ガルバ横葺','standard',1,0,0,0,0),
+  ];
+  const O=(category,name,cost,sale_price)=>({id:uid(),category,name,cost,sale_price,note:''});
+  const options=[
+    O('キッチン','深型食洗機',70000,120000),O('キッチン','タッチレス水栓',35000,60000),O('キッチン','カップボード',180000,280000),
+    O('キッチン','天板変更(セラミック)',120000,200000),O('キッチン','レンジフード変更',45000,80000),
+    O('浴室','浴室暖房乾燥機',90000,150000),O('浴室','手すり',12000,25000),O('浴室','窓追加',40000,70000),
+    O('トイレ','タンクレス化',130000,220000),O('トイレ','手洗い器',55000,95000),O('洗面','三面鏡収納',30000,55000),
+  ];
+  const stdCats=['キッチン','浴室','洗面','トイレ','外壁','屋根'];
+  const mkSet=(name,note)=>({id:uid(),name,note,items:stdCats.map(c=>{const e=equipment.find(x=>x.category===c&&x.is_standard);return{category:c,equipment_id:e?e.id:null}})});
+  const specSets=[mkSet('SW標準仕様','SW工法 標準パッケージ'),mkSet('一般標準仕様','一般工法 標準パッケージ')];
+  const properties=[
+    {id:uid(),name:'A様邸 新築工事',total_floor_area:105.2,building_area:58.4,site_area:165,floors:2,rooms:4,is_two_household:0,is_sw:1,insulation_grade:6,seismic_grade:2,is_long_life:1,is_gx:1,note:'SW工法・長期優良',created_at:dAgo(5)},
+    {id:uid(),name:'B様邸 二世帯住宅',total_floor_area:142.6,building_area:78.2,site_area:210.5,floors:2,rooms:6,is_two_household:1,is_sw:1,insulation_grade:6,seismic_grade:3,is_long_life:1,is_gx:0,note:'二世帯',created_at:dAgo(12)},
+    {id:uid(),name:'C様邸 平屋プラン',total_floor_area:88,building_area:88,site_area:200,floors:1,rooms:3,is_two_household:0,is_sw:0,insulation_grade:5,seismic_grade:2,is_long_life:0,is_gx:0,note:'平屋',created_at:dAgo(20)},
+  ];
+  const pe=(p,fa,wi,d,q,up,date)=>({id:uid(),property_name:p,total_floor_area:fa,work_item:wi,detail:d,quantity:q,unit_price:up,amount:q*up,created_date:date});
+  const pastEstimates=[
+    pe('過去物件1',102,'基礎工事','ベタ基礎',56,25000,'2024-04-10'),pe('過去物件2',110,'基礎工事','ベタ基礎',60,26500,'2024-09-15'),
+    pe('過去物件3',98,'基礎工事','ベタ基礎',54,28000,'2025-02-20'),pe('過去物件4',120,'基礎工事','ベタ基礎',66,29000,'2025-11-05'),
+    pe('過去物件1',102,'木工事','構造材・建方',102,38000,'2024-04-10'),pe('過去物件2',110,'木工事','構造材・建方',110,40000,'2024-09-15'),
+    pe('過去物件3',98,'木工事','構造材・建方',98,41500,'2025-02-20'),pe('過去物件4',120,'木工事','構造材・建方',120,43000,'2025-11-05'),
+    pe('過去物件1',102,'外壁工事','窯業系サイディング',180,9800,'2024-04-10'),pe('過去物件2',110,'外壁工事','窯業系サイディング',195,10500,'2024-09-15'),
+    pe('過去物件3',98,'外壁工事','窯業系サイディング',170,11000,'2025-02-20'),
+    pe('過去物件1',102,'内装工事','クロス工事',320,1350,'2024-04-10'),pe('過去物件2',110,'内装工事','クロス工事',350,1450,'2024-09-15'),
+    pe('過去物件3',98,'内装工事','クロス工事',300,1500,'2025-02-20'),
+  ];
+  return {properties,workItems,priceHistory,equipment,options,specSets,estimates:[],pastEstimates,coefficients};
+}
+
+/* ---------------- store ---------------- */
+let DB;
+function load(){ try{const r=localStorage.getItem(LS_KEY);if(r){DB=JSON.parse(r);return}}catch(e){} DB=seed();save(); }
+function save(){ localStorage.setItem(LS_KEY,JSON.stringify(DB)); }
+function resetAll(){ if(confirm('全データを初期サンプルに戻します。よろしいですか？')){DB=seed();save();render();} }
+
+/* ---------------- calc engine (calc.ts 移植) ---------------- */
+function coef(type,key){const c=DB.coefficients.find(x=>x.type===type&&x.key===String(key));return c?c.value:1;}
+function calcWorkLine(p,it,manualQty,grade){
+  const price=it.standard_price||0, fa=p.total_floor_area||0, ba=p.building_area||0;
+  let q=1,k=1,base=0,f='';
+  switch(it.calc_method){
+    case 'floor_area': q=fa;base=fa*price;f=`延床 ${fa}㎡ × ${num(price)}円`;break;
+    case 'building_area': q=ba;base=ba*price;f=`建築 ${ba}㎡ × ${num(price)}円`;break;
+    case 'quantity': q=manualQty||0;base=q*price;f=`数量 ${q}${it.unit} × ${num(price)}円`;break;
+    case 'lump_sum': q=1;base=price;f=`一式 ${num(price)}円`;break;
+    case 'room_factor': q=p.rooms;base=p.rooms*price;f=`部屋数 ${p.rooms}${it.unit} × ${num(price)}円`;break;
+    case 'floor_factor': k=coef('floor',p.floors);q=fa;base=fa*price*k;f=`延床 ${fa}㎡ × ${num(price)}円 × 階数係数${k}`;break;
+    case 'sw_factor': k=coef('sw',p.is_sw?'on':'off');q=fa;base=fa*price*k;f=`延床 ${fa}㎡ × ${num(price)}円 × SW係数${k}`;break;
+    case 'gx_factor': k=coef('gx',p.is_gx?'on':'off');q=fa;base=fa*price*k;f=`延床 ${fa}㎡ × ${num(price)}円 × GX係数${k}`;break;
+    case 'grade_factor': k=coef('grade',grade);q=fa;base=fa*price*k;f=`延床 ${fa}㎡ × ${num(price)}円 × グレード係数${k}`;break;
+    case 'manual': q=manualQty||1;base=q*price;f=`手入力補正 ${num(base)}円`;break;
+    default: q=1;base=price;f=`一式 ${num(price)}円`;
+  }
+  return {quantity:Math.round(q),unit_price:Math.round(price),amount:Math.round(base),coefficient:k,calc_formula:f};
+}
+function buildBreakdown(input){
+  const p=DB.properties.find(x=>x.id===input.property_id);
+  if(!p) return null;
+  const grade=input.grade||'standard';
+  const leaves=DB.workItems.filter(w=>w.level===3);
+  const majorName=pid=>{const m=DB.workItems.find(x=>x.id===pid);return m?m.name:''};
+  let workSale=0,workCost=0;
+  const workLines=leaves.map(it=>{
+    const r=calcWorkLine(p,it,(input.manualQty||{})[it.id],grade);
+    const ratio=it.standard_price>0?it.cost/it.standard_price:1;
+    const cost_amount=Math.round(r.amount*ratio);
+    workSale+=r.amount;workCost+=cost_amount;
+    return {work_item_id:it.id,category:majorName(it.parent_id),work_item_name:it.name,unit:it.unit,quantity:r.quantity,unit_price:r.unit_price,amount:r.amount,cost_amount,calc_method:it.calc_method,calc_formula:r.calc_formula,coefficient:r.coefficient};
+  });
+  const set=input.spec_set_id?DB.specSets.find(s=>s.id===input.spec_set_id):null;
+  const stdByCat={}; if(set) set.items.forEach(i=>stdByCat[i.category]=i.equipment_id);
+  const cats=new Set([...Object.keys(stdByCat),...Object.keys(input.equipment||{})]);
+  const eqById=id=>id?DB.equipment.find(e=>e.id===id):null;
+  const selOpts=(input.options||[]).map(id=>DB.options.find(o=>o.id===id)).filter(Boolean);
+  const optLines=selOpts.map(o=>({category:o.category,option_id:o.id,option_name:o.name,cost:o.cost,sale_price:o.sale_price}));
+  const optSale={},optCost={};
+  selOpts.forEach(o=>{optSale[o.category]=(optSale[o.category]||0)+o.sale_price;optCost[o.category]=(optCost[o.category]||0)+o.cost;});
+  let eqSale=0,eqCost=0;
+  const equipmentLines=[...cats].map(cat=>{
+    const std=eqById(stdByCat[cat]);
+    const selId=(input.equipment||{})[cat]!=null?input.equipment[cat]:stdByCat[cat];
+    const sel=eqById(selId);
+    const sp=std?std.sale_price+std.install_cost:0;
+    const selp=sel?sel.sale_price+sel.install_cost:0;
+    const selc=sel?sel.cost+sel.install_cost:0;
+    const ot=optSale[cat]||0, oc=optCost[cat]||0;
+    eqSale+=selp+ot; eqCost+=selc+oc;
+    return {category:cat,standard_equipment_name:std?std.maker+' '+std.product_name:'（標準なし）',standard_price:sp,
+      equipment_id:sel?sel.id:null,equipment_name:sel?sel.maker+' '+sel.product_name:'（未選択）',selected_price:selp,option_total:ot,diff:selp+ot-sp};
+  });
+  const total_sale=Math.round(workSale+eqSale), total_cost=Math.round(workCost+eqCost);
+  return {property:p,workLines,equipmentLines,optLines,totals:{
+    total_sale,total_cost,gross_profit:total_sale-total_cost,
+    gross_margin:total_sale>0?Math.round((total_sale-total_cost)/total_sale*1000)/10:0,
+    diff_total:Math.round(equipmentLines.reduce((s,e)=>s+e.diff,0))}};
+}
+
+/* ---------------- analytics ---------------- */
+function stats(a){if(!a.length)return{avg:0,median:0,max:0,min:0,count:0};const s=[...a].sort((x,y)=>x-y);const sum=s.reduce((p,c)=>p+c,0);const m=Math.floor(s.length/2);const med=s.length%2?s[m]:(s[m-1]+s[m])/2;return{avg:Math.round(sum/s.length),median:Math.round(med),max:s[s.length-1],min:s[0],count:s.length};}
+function analytics(){
+  const by={};
+  DB.pastEstimates.filter(r=>r.unit_price>0).forEach(r=>{(by[r.work_item]=by[r.work_item]||[]).push({price:r.unit_price,date:r.created_date||''})});
+  return Object.entries(by).map(([work_item,list])=>{
+    const prices=list.map(l=>l.price);
+    const sd=[...list].sort((a,b)=>a.date<b.date?-1:a.date>b.date?1:0);
+    const oldest=sd[0],latest=sd[sd.length-1];
+    const rate=oldest.price>0?(latest.price-oldest.price)/oldest.price*100:0;
+    return {work_item,...stats(prices),latest:latest.price,latest_date:latest.date,rise_rate:Math.round(rate*10)/10};
+  }).sort((a,b)=>b.count-a.count);
+}
+
+/* ===================== UI ===================== */
+const NAV=[
+  {v:'dashboard',label:'ダッシュボード',ic:'▤'},
+  {v:'properties',label:'物件管理',ic:'🏠'},
+  {v:'estimate-new',label:'概算見積作成',ic:'🧮'},
+  {v:'estimates',label:'概算見積一覧',ic:'📄'},
+  {sec:'マスター'},
+  {v:'workitems',label:'工事項目マスター',ic:'🛠'},
+  {v:'equipment',label:'住設マスター',ic:'🚿'},
+  {v:'options',label:'オプションマスター',ic:'➕'},
+  {v:'specs',label:'標準仕様管理',ic:'📐'},
+  {sec:'蓄積・分析'},
+  {v:'past',label:'過去見積DB',ic:'🗄'},
+  {v:'analytics',label:'単価分析',ic:'📈'},
+  {sec:'データ'},
+  {v:'data',label:'バックアップ/設定',ic:'⚙'},
+];
+const state={view:'dashboard',ecState:null,detailId:null};
+function go(v){state.view=v;document.getElementById('side').classList.remove('open');render();}
+
+function renderNav(){
+  document.getElementById('nav').innerHTML=NAV.map(n=>n.sec?`<div class="sec">${n.sec}</div>`:
+    `<a class="${state.view===n.v?'on':''}" onclick="go('${n.v}')"><span class="ic">${n.ic}</span>${n.label}</a>`).join('');
+}
+function head(title,desc,action){return `<div class="head"><div><h1>${esc(title)}</h1>${desc?`<p>${esc(desc)}</p>`:''}</div><div>${action||''}</div></div>`;}
+
+/* -------- modal -------- */
+function modal(title,bodyHTML,wide){
+  document.getElementById('modal-root').innerHTML=
+   `<div class="ov" onclick="if(event.target===this)closeModal()"><div class="modal ${wide?'wide':''}">
+     <div class="mt"><b>${esc(title)}</b><button class="x" onclick="closeModal()">✕</button></div>
+     <div class="pad">${bodyHTML}</div></div></div>`;
+}
+function closeModal(){document.getElementById('modal-root').innerHTML='';}
+
+/* ============ views ============ */
+function render(){
+  renderNav();
+  const v=state.view, el=document.getElementById('view');
+  const fn={dashboard:vDashboard,properties:vProperties,workitems:vWorkItems,equipment:vEquipment,options:vOptions,
+    specs:vSpecs,'estimate-new':vEstimateNew,estimates:vEstimates,'estimate-detail':vEstimateDetail,past:vPast,analytics:vAnalytics,data:vData}[v];
+  el.innerHTML=fn?fn():'<div class="empty">準備中</div>';
+  if(v==='estimate-new') ecAfterRender();
+}
+
+/* ---- dashboard ---- */
+function vDashboard(){
+  const recent=[...DB.properties].sort((a,b)=>b.created_at<a.created_at?-1:1).slice(0,5);
+  const ph=[...DB.priceHistory].sort((a,b)=>b.changed_at<a.changed_at?-1:1).slice(0,6);
+  const pastProps=new Set(DB.pastEstimates.map(p=>p.property_name)).size;
+  const trend=DB.workItems.filter(w=>w.level===3&&DB.priceHistory.some(h=>h.work_item_id===w.id)).slice(0,6).map(w=>{
+    const first=DB.priceHistory.filter(h=>h.work_item_id===w.id).sort((a,b)=>a.changed_at<b.changed_at?-1:1)[0];
+    const rr=first&&first.old_price>0?Math.round((w.standard_price-first.old_price)/first.old_price*1000)/10:0;
+    return {...w,rr};
+  });
+  return head('ダッシュボード','概算精度向上の起点となる最新の状況')+
+  `<div class="grid" style="grid-template-columns:repeat(4,1fr)">
+    <div class="stat"><div class="k">概算作成件数</div><div class="v" style="color:var(--brand-d)">${DB.estimates.length}</div><div class="s">保存済みの概算</div></div>
+    <div class="stat"><div class="k">登録物件数</div><div class="v">${DB.properties.length}</div></div>
+    <div class="stat"><div class="k">過去見積 明細</div><div class="v">${DB.pastEstimates.length}</div><div class="s">${pastProps} 物件分</div></div>
+    <div class="stat"><div class="k">単価改定 履歴</div><div class="v">${DB.priceHistory.length}</div></div>
+  </div>
+  <div class="grid" style="grid-template-columns:1fr 1fr;margin-top:18px">
+    <div class="card"><div class="ct">最近作成した物件<span class="lnk" onclick="go('properties')">一覧へ</span></div>
+      ${recent.length?recent.map(p=>`<div style="display:flex;justify-content:space-between;padding:11px 18px;border-bottom:1px solid #f1f5f9">
+        <div><b>${esc(p.name)}</b><div class="mut" style="font-size:11px">延床 ${p.total_floor_area}㎡</div></div>
+        <div>${p.is_sw?'<span class="badge b-ok">SW</span> ':''}${p.is_gx?'<span class="badge b-warn">GX</span>':''}</div></div>`).join(''):'<div class="empty">物件がありません</div>'}
+    </div>
+    <div class="card"><div class="ct">単価更新履歴<span class="lnk" onclick="go('workitems')">工事項目へ</span></div>
+      ${ph.length?ph.map(h=>{const d=h.new_price-h.old_price;return `<div style="display:flex;justify-content:space-between;padding:11px 18px;border-bottom:1px solid #f1f5f9">
+        <div><b>${esc(h.name)}</b><div class="mut" style="font-size:11px">${esc(h.reason)} ・ ${(h.changed_at||'').slice(0,10)}</div></div>
+        <div class="r"><div>${yen(h.old_price)}→${yen(h.new_price)}</div><div style="font-size:11px;font-weight:700;color:${d>=0?'var(--red)':'var(--ok)'}">${yens(d)}</div></div></div>`}).join(''):'<div class="empty">履歴がありません</div>'}
+    </div>
+  </div>
+  <div class="card" style="margin-top:18px"><div class="ct">工事項目別 単価推移<span class="lnk" onclick="go('analytics')">分析へ</span></div>
+    <div class="grid" style="grid-template-columns:repeat(3,1fr);gap:1px;background:#f1f5f9">
+      ${trend.map(t=>`<div style="background:#fff;padding:14px 18px"><b>${esc(t.name)}</b>
+        <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-top:6px">
+        <div style="font-size:17px;font-weight:800">${yen(t.standard_price)}<span class="mut" style="font-size:11px;font-weight:400">/${t.unit}</span></div>
+        <span class="badge ${t.rr>=0?'b-red':'b-ok'}">${t.rr>=0?'▲':'▼'} ${Math.abs(t.rr)}%</span></div></div>`).join('')||'<div class="empty">推移データなし</div>'}
+    </div></div>`;
+}
+
+/* ---- properties ---- */
+function vProperties(){
+  const rows=DB.properties.map(p=>`<tr>
+    <td><b>${esc(p.name)}</b></td><td>${p.total_floor_area}㎡</td><td>${p.building_area}㎡</td><td>${p.floors}階</td><td>${p.rooms}</td>
+    <td>${p.is_sw?'<span class="badge b-ok">SW</span> ':''}${p.is_gx?'<span class="badge b-warn">GX</span> ':''}${p.is_two_household?'<span class="badge b-vio">二世帯</span> ':''}${p.is_long_life?'<span class="badge b-sky">長期優良</span>':''}</td>
+    <td class="r"><span class="lnk" onclick="propEdit(${p.id})">編集</span> <span class="lnk red" onclick="propDel(${p.id})">削除</span></td></tr>`).join('');
+  return head('物件管理','面積・階数・各種フラグが計算方式・補正係数に反映されます。',`<button class="btn pri" onclick="propEdit(0)">＋ 物件を登録</button>`)+
+  `<div class="card"><table><thead><tr><th>物件名</th><th>延床</th><th>建築</th><th>階数</th><th>部屋数</th><th>仕様</th><th></th></tr></thead><tbody>${rows}</tbody></table>${DB.properties.length?'':'<div class="empty">物件がありません</div>'}</div>`;
+}
+function propEdit(id){
+  const p=id?DB.properties.find(x=>x.id===id):{name:'',total_floor_area:100,building_area:55,site_area:165,floors:2,rooms:4,is_two_household:0,is_sw:0,insulation_grade:4,seismic_grade:2,is_long_life:0,is_gx:0,note:''};
+  const f=(k,l,t='number')=>`<label class="f"><span>${l}</span><input id="p_${k}" type="${t}" value="${esc(p[k])}"></label>`;
+  const ck=(k,l)=>`<label class="chip ${p[k]?'on':''}" style="justify-content:center" onclick="this.classList.toggle('on')" data-k="${k}"><input type="checkbox" ${p[k]?'checked':''} style="display:none">${l}</label>`;
+  modal(id?'物件を編集':'物件を登録',
+    `<label class="f"><span>物件名 *</span><input id="p_name" value="${esc(p.name)}" placeholder="〇〇様邸 新築工事"></label>
+     <div class="grid" style="grid-template-columns:1fr 1fr 1fr;margin-top:12px">
+       ${f('total_floor_area','延床面積(㎡)')}${f('building_area','建築面積(㎡)')}${f('site_area','敷地面積(㎡)')}
+       ${f('floors','階数')}${f('rooms','部屋数')}<div></div>${f('insulation_grade','断熱等級')}${f('seismic_grade','耐震等級')}<div></div></div>
+     <div style="margin-top:12px"><span style="font-size:11px;color:var(--muted);font-weight:600">仕様フラグ</span>
+       <div class="grid" style="grid-template-columns:1fr 1fr;gap:8px;margin-top:6px">${ck('is_sw','SW工法')}${ck('is_gx','GX志向型')}${ck('is_two_household','二世帯住宅')}${ck('is_long_life','長期優良住宅')}</div></div>
+     <label class="f" style="margin-top:12px"><span>備考</span><textarea id="p_note" rows="2">${esc(p.note)}</textarea></label>
+     <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px"><button class="btn gh" onclick="closeModal()">キャンセル</button><button class="btn pri" onclick="propSave(${id})">保存</button></div>`,true);
+}
+function propSave(id){
+  const g=k=>document.getElementById('p_'+k);
+  const name=g('name').value.trim(); if(!name)return alert('物件名は必須です');
+  const flags={}; document.querySelectorAll('[data-k]').forEach(e=>flags[e.dataset.k]=e.classList.contains('on')?1:0);
+  const obj={name,total_floor_area:+g('total_floor_area').value||0,building_area:+g('building_area').value||0,site_area:+g('site_area').value||0,
+    floors:+g('floors').value||0,rooms:+g('rooms').value||0,insulation_grade:+g('insulation_grade').value||0,seismic_grade:+g('seismic_grade').value||0,note:g('note').value,...flags};
+  if(id){Object.assign(DB.properties.find(x=>x.id===id),obj);}else{DB.properties.push({id:uid(),created_at:todayISO(),...obj});}
+  save();closeModal();render();
+}
+function propDel(id){if(confirm('削除しますか？')){DB.properties=DB.properties.filter(x=>x.id!==id);save();render();}}
+
+/* ---- work items ---- */
+function vWorkItems(){
+  const majors=DB.workItems.filter(w=>w.level===1).sort((a,b)=>a.sort-b.sort);
+  const blocks=majors.map(m=>{
+    const ch=DB.workItems.filter(c=>c.parent_id===m.id);
+    return `<div class="card" style="margin-bottom:14px"><div class="ct"><span><span class="badge b-blue">大項目</span> ${esc(m.name)}</span></div>
+    <table><thead><tr><th>小項目</th><th>単位</th><th class="r">標準単価</th><th class="r">原価</th><th>計算方式</th><th>更新日</th><th></th></tr></thead><tbody>
+    ${ch.map(c=>`<tr><td><b>${esc(c.name)}</b></td><td class="mut">${c.unit}</td><td class="r">${yen(c.standard_price)}</td><td class="r mut">${yen(c.cost)}</td>
+      <td><span class="badge b-gray">${CALC[c.calc_method]||c.calc_method}</span></td><td class="mut" style="font-size:11px">${(c.updated_at||'').slice(0,10)}</td>
+      <td class="r"><span class="lnk" onclick="wiEdit(${c.id})">編集</span> <span class="lnk" onclick="wiHist(${c.id})" style="color:var(--muted)">履歴</span></td></tr>`).join('')}
+    </tbody></table></div>`;
+  }).join('');
+  return head('工事項目マスター','単価を変更すると更新履歴が自動記録され、精度分析の基礎データになります。')+blocks;
+}
+function wiEdit(id){
+  const c=DB.workItems.find(x=>x.id===id);
+  modal('工事項目を編集: '+c.name,
+   `<label class="f"><span>工事項目名</span><input id="w_name" value="${esc(c.name)}"></label>
+    <div class="grid" style="grid-template-columns:1fr 1fr;margin-top:12px">
+      <label class="f"><span>単位</span><input id="w_unit" value="${esc(c.unit)}"></label>
+      <label class="f"><span>計算方式</span><select id="w_calc">${Object.entries(CALC).map(([k,v])=>`<option value="${k}" ${k===c.calc_method?'selected':''}>${v}</option>`).join('')}</select></label>
+      <label class="f"><span>標準単価(円)</span><input id="w_price" type="number" value="${c.standard_price}"></label>
+      <label class="f"><span>原価(円)</span><input id="w_cost" type="number" value="${c.cost}"></label></div>
+    <div class="note" style="margin-top:12px">標準単価・原価を変更すると<b>単価更新履歴</b>に自動記録されます。</div>
+    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px"><button class="btn gh" onclick="closeModal()">キャンセル</button><button class="btn pri" onclick="wiSave(${id})">保存</button></div>`);
+}
+function wiSave(id){
+  const c=DB.workItems.find(x=>x.id===id);
+  const np=+document.getElementById('w_price').value||0, nc=+document.getElementById('w_cost').value||0;
+  if(np!==c.standard_price||nc!==c.cost){
+    DB.priceHistory.push({id:uid(),work_item_id:c.id,name:c.name,old_price:c.standard_price,new_price:np,old_cost:c.cost,new_cost:nc,reason:'単価改定',changed_at:todayISO()});
+  }
+  c.name=document.getElementById('w_name').value; c.unit=document.getElementById('w_unit').value;
+  c.calc_method=document.getElementById('w_calc').value; c.standard_price=np; c.cost=nc; c.updated_at=todayISO();
+  save();closeModal();render();
+}
+function wiHist(id){
+  const h=DB.priceHistory.filter(x=>x.work_item_id===id).sort((a,b)=>b.changed_at<a.changed_at?-1:1);
+  modal('単価更新履歴', h.length?`<table><thead><tr><th>変更日</th><th class="r">単価</th><th class="r">原価</th><th>理由</th></tr></thead><tbody>
+    ${h.map(x=>`<tr><td>${(x.changed_at||'').slice(0,10)}</td><td class="r">${yen(x.old_price)}→${yen(x.new_price)}</td><td class="r mut">${yen(x.old_cost)}→${yen(x.new_cost)}</td><td class="mut">${esc(x.reason)}</td></tr>`).join('')}
+    </tbody></table>`:'<div class="empty">履歴はありません</div>');
+}
+
+/* ---- equipment ---- */
+let eqFilter='';
+function vEquipment(){
+  const chips=`<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px"><span class="chip ${eqFilter===''?'on':''}" onclick="eqFilter='';render()">すべて</span>${CATS.map(c=>`<span class="chip ${eqFilter===c?'on':''}" onclick="eqFilter='${c}';render()">${c}</span>`).join('')}</div>`;
+  const list=DB.equipment.filter(e=>!eqFilter||e.category===eqFilter);
+  const rows=list.map(e=>`<tr><td><span class="badge b-gray">${e.category}</span></td>
+    <td><b>${esc(e.product_name)}</b> <span class="mut" style="font-size:11px">${esc(e.maker)}</span> ${e.is_standard?'<span class="badge b-ok">標準</span>':''}</td>
+    <td class="mut">${e.grade}</td><td class="r mut">${yen(e.list_price)}</td><td class="r"><b>${yen(e.sale_price)}</b></td><td class="r mut">${yen(e.cost)}</td><td class="r mut">${yen(e.install_cost)}</td>
+    <td class="r"><span class="lnk" onclick="eqEdit(${e.id})">編集</span> <span class="lnk red" onclick="eqDel(${e.id})">削除</span></td></tr>`).join('');
+  return head('住設マスター','標準仕様と差額計算の基準になります。',`<button class="btn pri" onclick="eqEdit(0)">＋ 住設を登録</button>`)+chips+
+   `<div class="card"><table><thead><tr><th>カテゴリ</th><th>メーカー/商品</th><th>グレード</th><th class="r">定価</th><th class="r">売価</th><th class="r">原価</th><th class="r">施工費</th><th></th></tr></thead><tbody>${rows}</tbody></table>${list.length?'':'<div class="empty">住設がありません</div>'}</div>`;
+}
+function eqEdit(id){
+  const e=id?DB.equipment.find(x=>x.id===id):{category:eqFilter||CATS[0],maker:'',product_name:'',grade:'standard',is_standard:0,list_price:0,cost:0,sale_price:0,install_cost:0};
+  const n=(k,l)=>`<label class="f"><span>${l}</span><input id="e_${k}" type="number" value="${e[k]}"></label>`;
+  modal(id?'住設を編集':'住設を登録',
+   `<div class="grid" style="grid-template-columns:1fr 1fr">
+     <label class="f"><span>カテゴリ *</span><select id="e_category">${CATS.map(c=>`<option ${c===e.category?'selected':''}>${c}</option>`).join('')}</select></label>
+     <label class="f"><span>メーカー</span><input id="e_maker" value="${esc(e.maker)}"></label></div>
+    <label class="f" style="margin-top:12px"><span>商品名 *</span><input id="e_product_name" value="${esc(e.product_name)}"></label>
+    <div class="grid" style="grid-template-columns:1fr 1fr;margin-top:12px">
+     <label class="f"><span>グレード</span><select id="e_grade">${GRADES.map(g=>`<option value="${g.k}" ${g.k===e.grade?'selected':''}>${g.l}</option>`).join('')}</select></label>
+     <label class="chip ${e.is_standard?'on':''}" style="justify-content:center;margin-top:18px" onclick="this.classList.toggle('on')" id="e_std">標準仕様にする</label>
+     ${n('list_price','定価')}${n('sale_price','売価')}${n('cost','原価')}${n('install_cost','施工費')}</div>
+    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px"><button class="btn gh" onclick="closeModal()">キャンセル</button><button class="btn pri" onclick="eqSave(${id})">保存</button></div>`);
+}
+function eqSave(id){
+  const g=k=>document.getElementById('e_'+k);
+  const pn=g('product_name').value.trim(); if(!pn)return alert('商品名は必須です');
+  const obj={category:g('category').value,maker:g('maker').value,product_name:pn,grade:g('grade').value,is_standard:document.getElementById('e_std').classList.contains('on')?1:0,
+    list_price:+g('list_price').value||0,sale_price:+g('sale_price').value||0,cost:+g('cost').value||0,install_cost:+g('install_cost').value||0,note:''};
+  if(id){Object.assign(DB.equipment.find(x=>x.id===id),obj);}else{DB.equipment.push({id:uid(),...obj});}
+  save();closeModal();render();
+}
+function eqDel(id){if(confirm('削除しますか？')){DB.equipment=DB.equipment.filter(x=>x.id!==id);save();render();}}
+
+/* ---- options ---- */
+function vOptions(){
+  const groups={};DB.options.forEach(o=>(groups[o.category]=groups[o.category]||[]).push(o));
+  const blocks=Object.entries(groups).map(([cat,os])=>`<div class="card" style="margin-bottom:14px"><div class="ct">${cat}</div>
+    <table><thead><tr><th>オプション名</th><th class="r">売価</th><th class="r">原価</th><th class="r">粗利</th><th></th></tr></thead><tbody>
+    ${os.map(o=>`<tr><td><b>${esc(o.name)}</b></td><td class="r">${yen(o.sale_price)}</td><td class="r mut">${yen(o.cost)}</td><td class="r" style="color:var(--ok)">${yen(o.sale_price-o.cost)}</td>
+      <td class="r"><span class="lnk" onclick="optEdit(${o.id})">編集</span> <span class="lnk red" onclick="optDel(${o.id})">削除</span></td></tr>`).join('')}</tbody></table></div>`).join('');
+  return head('オプションマスター','概算時に選択すると差額に加算されます。',`<button class="btn pri" onclick="optEdit(0)">＋ オプションを登録</button>`)+(blocks||'<div class="card"><div class="empty">オプションがありません</div></div>');
+}
+function optEdit(id){
+  const o=id?DB.options.find(x=>x.id===id):{category:CATS[0],name:'',cost:0,sale_price:0,note:''};
+  modal(id?'オプションを編集':'オプションを登録',
+   `<label class="f"><span>カテゴリ *</span><select id="o_category">${CATS.map(c=>`<option ${c===o.category?'selected':''}>${c}</option>`).join('')}</select></label>
+    <label class="f" style="margin-top:12px"><span>オプション名 *</span><input id="o_name" value="${esc(o.name)}"></label>
+    <div class="grid" style="grid-template-columns:1fr 1fr;margin-top:12px"><label class="f"><span>売価</span><input id="o_sale" type="number" value="${o.sale_price}"></label><label class="f"><span>原価</span><input id="o_cost" type="number" value="${o.cost}"></label></div>
+    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px"><button class="btn gh" onclick="closeModal()">キャンセル</button><button class="btn pri" onclick="optSave(${id})">保存</button></div>`);
+}
+function optSave(id){
+  const name=document.getElementById('o_name').value.trim(); if(!name)return alert('オプション名は必須です');
+  const obj={category:document.getElementById('o_category').value,name,sale_price:+document.getElementById('o_sale').value||0,cost:+document.getElementById('o_cost').value||0,note:''};
+  if(id){Object.assign(DB.options.find(x=>x.id===id),obj);}else{DB.options.push({id:uid(),...obj});}
+  save();closeModal();render();
+}
+function optDel(id){if(confirm('削除しますか？')){DB.options=DB.options.filter(x=>x.id!==id);save();render();}}
+
+/* ---- specs ---- */
+let specSel=null;
+function vSpecs(){
+  if(specSel==null&&DB.specSets[0])specSel=DB.specSets[0].id;
+  const set=DB.specSets.find(s=>s.id===specSel);
+  const left=DB.specSets.map(s=>`<div class="card" style="margin-bottom:10px;cursor:pointer;${s.id===specSel?'border-color:var(--brand);box-shadow:0 0 0 2px var(--brand-l)':''}" onclick="specSel=${s.id};render()">
+    <div class="pad" style="padding:14px"><b>${esc(s.name)}</b><div class="mut" style="font-size:11px;margin-top:2px">${esc(s.note)}</div></div></div>`).join('');
+  const detail=set?`<div class="card"><div class="ct">${esc(set.name)}<button class="btn gh sm" onclick="specEdit(${set.id})">標準仕様を編集</button></div>
+    <table><thead><tr><th>カテゴリ</th><th>標準住設</th><th class="r">標準価格(売価+施工)</th></tr></thead><tbody>
+    ${set.items.map(i=>{const e=DB.equipment.find(x=>x.id===i.equipment_id);return `<tr><td><span class="badge b-gray">${i.category}</span></td><td><b>${e?esc(e.maker+' '+e.product_name):'（未設定）'}</b></td><td class="r">${e?yen(e.sale_price+e.install_cost):'—'}</td></tr>`}).join('')}
+    </tbody></table></div>`:'<div class="card"><div class="empty">仕様セットを選択してください</div></div>';
+  return head('標準仕様管理','住宅タイプごとの標準仕様。概算作成時に自動選択され差額計算の基準になります。')+
+   `<div class="grid" style="grid-template-columns:300px 1fr">${`<div>${left}</div>`}${detail}</div>`;
+}
+function specEdit(id){
+  const set=DB.specSets.find(s=>s.id===id);
+  const body=set.items.map((it,idx)=>`<div style="display:flex;gap:10px;align-items:center;margin-bottom:8px"><span style="width:90px;font-size:13px;color:#475569">${it.category}</span>
+    <select id="s_${idx}">${'<option value="">（未設定）</option>'+DB.equipment.filter(e=>e.category===it.category).map(e=>`<option value="${e.id}" ${e.id===it.equipment_id?'selected':''}>${esc(e.maker+' '+e.product_name)}（${yen(e.sale_price)}）</option>`).join('')}</select></div>`).join('');
+  modal('標準仕様を編集: '+set.name, body+`<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px"><button class="btn gh" onclick="closeModal()">キャンセル</button><button class="btn pri" onclick="specSave(${id})">保存</button></div>`,true);
+}
+function specSave(id){
+  const set=DB.specSets.find(s=>s.id===id);
+  set.items.forEach((it,idx)=>{const v=document.getElementById('s_'+idx).value;it.equipment_id=v?+v:null;});
+  save();closeModal();render();
+}
+
+/* ---- estimate create ---- */
+function ecInit(){
+  if(state.ecState)return;
+  state.ecState={property_id:DB.properties[0]?DB.properties[0].id:null,spec_set_id:DB.specSets[0]?DB.specSets[0].id:null,grade:'standard',equipment:{},options:[],manualQty:{},name:''};
+  applySpecDefaults();
+}
+function applySpecDefaults(){
+  const s=state.ecState; s.equipment={};
+  if(s.spec_set_id){const set=DB.specSets.find(x=>x.id===s.spec_set_id);if(set)set.items.forEach(i=>{if(i.equipment_id)s.equipment[i.category]=i.equipment_id});}
+}
+function vEstimateNew(){
+  ecInit(); const s=state.ecState;
+  const cats=Object.keys(s.equipment);
+  const qtyItems=DB.workItems.filter(w=>w.level===3&&['quantity','manual'].includes(w.calc_method));
+  const eqByCat=c=>DB.equipment.filter(e=>e.category===c);
+  const optByCat=c=>DB.options.filter(o=>o.category===c);
+  const form=`<div>
+    <div class="card" style="margin-bottom:16px"><div class="pad">
+      <div style="font-weight:700;font-size:13px;margin-bottom:10px">① 物件・標準仕様</div>
+      <label class="f"><span>物件</span><select onchange="ecSet('property_id',+this.value)">${DB.properties.map(p=>`<option value="${p.id}" ${p.id===s.property_id?'selected':''}>${esc(p.name)}（延床${p.total_floor_area}㎡）</option>`).join('')}</select></label>
+      <div class="grid" style="grid-template-columns:1fr 1fr;margin-top:10px">
+        <label class="f"><span>標準仕様セット</span><select onchange="ecSetSpec(this.value)"><option value="">（適用しない）</option>${DB.specSets.map(x=>`<option value="${x.id}" ${x.id===s.spec_set_id?'selected':''}>${esc(x.name)}</option>`).join('')}</select></label>
+        <label class="f"><span>グレード</span><select onchange="ecSet('grade',this.value)">${GRADES.map(g=>`<option value="${g.k}" ${g.k===s.grade?'selected':''}>${g.l}</option>`).join('')}</select></label>
+      </div></div></div>
+    ${cats.length?`<div class="card" style="margin-bottom:16px"><div class="pad"><div style="font-weight:700;font-size:13px;margin-bottom:10px">② 住設の選択</div>
+      ${cats.map(c=>`<label class="f" style="margin-bottom:10px"><span>${c}</span><select onchange="ecEq('${c}',+this.value)">${eqByCat(c).map(e=>`<option value="${e.id}" ${e.id===s.equipment[c]?'selected':''}>${esc(e.maker+' '+e.product_name)} — ${yen(e.sale_price+e.install_cost)}${e.is_standard?'（標準）':''}</option>`).join('')}</select></label>`).join('')}
+      </div></div>`:''}
+    <div class="card" style="margin-bottom:16px"><div class="pad"><div style="font-weight:700;font-size:13px;margin-bottom:10px">③ オプション</div>
+      ${CATS.filter(c=>optByCat(c).length).map(c=>`<div style="margin-bottom:10px"><div class="mut" style="font-size:11px;font-weight:600;margin-bottom:4px">${c}</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px">${optByCat(c).map(o=>`<span class="opt ${s.options.includes(o.id)?'on':''}" onclick="ecOpt(${o.id})">${esc(o.name)} ${yens(o.sale_price)}</span>`).join('')}</div></div>`).join('')}
+      </div></div>
+    ${qtyItems.length?`<div class="card"><div class="pad"><div style="font-weight:700;font-size:13px;margin-bottom:10px">④ 数量入力（数量×単価の項目）</div>
+      ${qtyItems.map(it=>`<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px"><span style="flex:1;font-size:13px">${esc(it.name)}</span>
+        <input style="width:110px;text-align:right" type="number" value="${s.manualQty[it.id]||''}" placeholder="0" oninput="ecQty(${it.id},this.value)"><span class="mut" style="width:30px;font-size:11px">${it.unit}</span></div>`).join('')}
+      </div></div>`:''}</div>`;
+  return head('概算見積作成','物件と標準仕様を選び、住設・オプションを調整。工事項目は自動算出され、標準仕様との差額が即時表示されます。')+
+    `<div class="grid" style="grid-template-columns:minmax(320px,2fr) 3fr;align-items:start">${form}<div id="ec-result"></div></div>`;
+}
+function ecResultHTML(){
+  const s=state.ecState; const d=buildBreakdown(s);
+  if(!d)return '<div class="card"><div class="empty">物件を選択してください</div></div>';
+  const t=d.totals;
+  return `<div class="grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:16px">
+    <div class="stat"><div class="k">概算売価</div><div class="v" style="font-size:22px;color:var(--brand-d)">${yen(t.total_sale)}</div></div>
+    <div class="stat"><div class="k">概算原価</div><div class="v" style="font-size:22px">${yen(t.total_cost)}</div></div>
+    <div class="stat"><div class="k">粗利 (${t.gross_margin}%)</div><div class="v" style="font-size:22px;color:var(--ok)">${yen(t.gross_profit)}</div></div></div>
+   <div class="card" style="margin-bottom:16px"><div class="ct">標準仕様との差額</div>
+    <table><thead><tr><th>カテゴリ</th><th>標準 → 選択</th><th class="r">標準</th><th class="r">ｵﾌﾟｼｮﾝ</th><th class="r">差額</th></tr></thead><tbody>
+    ${d.equipmentLines.map(e=>`<tr><td><span class="badge b-gray">${e.category}</span></td><td style="font-size:12px">${esc(e.standard_equipment_name)} → <b>${esc(e.equipment_name)}</b></td>
+      <td class="r mut">${yen(e.standard_price)}</td><td class="r mut">${e.option_total?yens(e.option_total):'—'}</td>
+      <td class="r" style="font-weight:700;color:${e.diff>0?'var(--red)':e.diff<0?'var(--ok)':'var(--muted)'}">${e.diff===0?'±0':yens(e.diff)}</td></tr>`).join('')||'<tr><td colspan="5" class="empty">標準仕様セットを選ぶと差額が表示されます</td></tr>'}
+    </tbody>${d.equipmentLines.length?`<tfoot><tr><td colspan="4">差額合計</td><td class="r" style="color:${t.diff_total>=0?'var(--red)':'var(--ok)'}">${yens(t.diff_total)}</td></tr></tfoot>`:''}</table></div>
+   <div class="card" style="margin-bottom:16px"><div class="ct">工事項目 内訳（自動計算）</div><div class="scroll">
+    <table><thead><tr><th>工事項目</th><th class="r">数量</th><th class="r">単価</th><th class="r">金額</th><th>計算式</th></tr></thead><tbody>
+    ${d.workLines.map(w=>`<tr><td><span class="mut" style="font-size:11px">${w.category}</span><br><b>${esc(w.work_item_name)}</b></td>
+      <td class="r">${num(w.quantity)}<span class="mut" style="font-size:11px">${w.unit}</span></td><td class="r mut">${yen(w.unit_price)}</td><td class="r"><b>${yen(w.amount)}</b></td>
+      <td class="mut" style="font-size:11px">${esc(w.calc_formula)}</td></tr>`).join('')}</tbody></table></div></div>
+   <div class="card"><div class="pad" style="display:flex;gap:10px;align-items:center">
+     <input placeholder="概算見積の名称（任意）" value="${esc(s.name)}" oninput="state.ecState.name=this.value" style="flex:1">
+     <button class="btn pri" onclick="ecSave()">この概算を保存</button></div></div>`;
+}
+function ecAfterRender(){const r=document.getElementById('ec-result');if(r)r.innerHTML=ecResultHTML();}
+function ecUpdate(){const r=document.getElementById('ec-result');if(r)r.innerHTML=ecResultHTML();}
+function ecSet(k,v){state.ecState[k]=v;render();}
+function ecSetSpec(v){state.ecState.spec_set_id=v?+v:null;applySpecDefaults();render();}
+function ecEq(c,id){state.ecState.equipment[c]=id;ecUpdate();}
+function ecOpt(id){const o=state.ecState.options;const i=o.indexOf(id);if(i<0)o.push(id);else o.splice(i,1);render();}
+function ecQty(id,v){state.ecState.manualQty[id]=v===''?0:+v;ecUpdate();}
+function ecSave(){
+  const s=state.ecState; const d=buildBreakdown(s); if(!d)return;
+  const p=DB.properties.find(x=>x.id===s.property_id);
+  const est={id:uid(),property_id:s.property_id,property_name:p.name,total_floor_area:p.total_floor_area,name:s.name||(p.name+' 概算'),
+    created_at:todayISO(),total_sale:d.totals.total_sale,total_cost:d.totals.total_cost,
+    workLines:d.workLines,equipmentLines:d.equipmentLines,optLines:d.optLines};
+  DB.estimates.push(est);save();state.ecState=null;state.detailId=est.id;state.view='estimate-detail';render();
+}
+
+/* ---- estimates list / detail ---- */
+function vEstimates(){
+  const rows=[...DB.estimates].sort((a,b)=>b.created_at<a.created_at?-1:1).map(e=>`<tr>
+    <td><span class="lnk" onclick="state.detailId=${e.id};go('estimate-detail')">${esc(e.name)}</span></td><td class="mut">${esc(e.property_name)}</td>
+    <td class="r">${e.total_floor_area}㎡</td><td class="r"><b>${yen(e.total_sale)}</b></td><td class="r mut">${yen(e.total_cost)}</td><td class="mut" style="font-size:11px">${(e.created_at||'').slice(0,10)}</td>
+    <td class="r"><span class="lnk red" onclick="estDel(${e.id})">削除</span></td></tr>`).join('');
+  return head('概算見積一覧','保存済みの概算。蓄積データが将来の精度向上に活用されます。',`<button class="btn pri" onclick="state.ecState=null;go('estimate-new')">＋ 新規作成</button>`)+
+   `<div class="card"><table><thead><tr><th>名称</th><th>物件</th><th class="r">延床</th><th class="r">概算売価</th><th class="r">概算原価</th><th>作成日</th><th></th></tr></thead><tbody>${rows}</tbody></table>${DB.estimates.length?'':'<div class="empty">概算見積がありません</div>'}</div>`;
+}
+function estDel(id){if(confirm('削除しますか？')){DB.estimates=DB.estimates.filter(x=>x.id!==id);save();render();}}
+function vEstimateDetail(){
+  const e=DB.estimates.find(x=>x.id===state.detailId); if(!e)return '<div class="empty">見つかりません</div>';
+  const dt=e.equipmentLines.reduce((s,x)=>s+x.diff,0);
+  return head(e.name,`物件: ${e.property_name} ／ 延床 ${e.total_floor_area}㎡`,`<button class="btn gh" onclick="go('estimates')">一覧へ戻る</button>`)+
+   `<div class="grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:16px">
+     <div class="stat"><div class="k">概算売価</div><div class="v" style="font-size:22px;color:var(--brand-d)">${yen(e.total_sale)}</div></div>
+     <div class="stat"><div class="k">概算原価</div><div class="v" style="font-size:22px">${yen(e.total_cost)}</div></div>
+     <div class="stat"><div class="k">粗利</div><div class="v" style="font-size:22px;color:var(--ok)">${yen(e.total_sale-e.total_cost)}</div></div></div>
+    <div class="card" style="margin-bottom:16px"><div class="ct">標準仕様との差額</div>
+     <table><thead><tr><th>カテゴリ</th><th>選択住設</th><th class="r">標準</th><th class="r">選択</th><th class="r">ｵﾌﾟｼｮﾝ</th><th class="r">差額</th></tr></thead><tbody>
+     ${e.equipmentLines.map(x=>`<tr><td><span class="badge b-gray">${x.category}</span></td><td><b>${esc(x.equipment_name)}</b></td><td class="r mut">${yen(x.standard_price)}</td><td class="r">${yen(x.selected_price)}</td><td class="r mut">${x.option_total?yens(x.option_total):'—'}</td><td class="r" style="font-weight:700;color:${x.diff>0?'var(--red)':x.diff<0?'var(--ok)':'var(--muted)'}">${x.diff===0?'±0':yens(x.diff)}</td></tr>`).join('')}
+     </tbody><tfoot><tr><td colspan="5">差額合計</td><td class="r" style="color:${dt>=0?'var(--red)':'var(--ok)'}">${yens(dt)}</td></tr></tfoot></table></div>
+    ${e.optLines.length?`<div class="card" style="margin-bottom:16px"><div class="ct">選択オプション</div><table><thead><tr><th>カテゴリ</th><th>オプション</th><th class="r">売価</th></tr></thead><tbody>${e.optLines.map(o=>`<tr><td class="mut">${o.category}</td><td><b>${esc(o.option_name)}</b></td><td class="r">${yen(o.sale_price)}</td></tr>`).join('')}</tbody></table></div>`:''}
+    <div class="card"><div class="ct">工事項目 内訳</div><table><thead><tr><th>工事項目</th><th class="r">数量</th><th>単位</th><th class="r">単価</th><th class="r">金額</th><th>計算式</th></tr></thead><tbody>
+     ${e.workLines.map(w=>`<tr><td><span class="mut" style="font-size:11px">${w.category}</span><br><b>${esc(w.work_item_name)}</b></td><td class="r">${num(w.quantity)}</td><td class="mut">${w.unit}</td><td class="r mut">${yen(w.unit_price)}</td><td class="r"><b>${yen(w.amount)}</b></td><td class="mut" style="font-size:11px">${esc(w.calc_formula)}</td></tr>`).join('')}
+     </tbody></table></div>`;
+}
+
+/* ---- past estimates + CSV ---- */
+function vPast(){
+  const rows=[...DB.pastEstimates].sort((a,b)=>b.created_date<a.created_date?-1:1).map(r=>`<tr>
+    <td class="mut">${esc(r.property_name)}</td><td class="r">${r.total_floor_area}㎡</td><td><span class="badge b-gray">${esc(r.work_item)}</span></td><td><b>${esc(r.detail)}</b></td>
+    <td class="r">${num(r.quantity)}</td><td class="r">${yen(r.unit_price)}</td><td class="r"><b>${yen(r.amount)}</b></td><td class="mut" style="font-size:11px">${r.created_date}</td>
+    <td class="r"><span class="lnk red" onclick="pastDel(${r.id})">削除</span></td></tr>`).join('');
+  return head('過去見積データベース','過去の見積を蓄積。CSV取込で一括登録し、単価分析の元データになります。',
+    `<button class="btn gh" onclick="csvTemplate()">CSVテンプレート</button> <button class="btn pri" onclick="document.getElementById('csvfile').click()">CSV取込</button><input id="csvfile" type="file" accept=".csv" style="display:none" onchange="csvImport(this)">`)+
+   `<div class="card"><table><thead><tr><th>物件名</th><th class="r">延床</th><th>工事項目</th><th>明細</th><th class="r">数量</th><th class="r">単価</th><th class="r">金額</th><th>作成日</th><th></th></tr></thead><tbody>${rows}</tbody></table>${DB.pastEstimates.length?'':'<div class="empty">過去見積がありません。CSVを取り込んでください。</div>'}</div>`;
+}
+function pastDel(id){DB.pastEstimates=DB.pastEstimates.filter(x=>x.id!==id);save();render();}
+const CSV_MAP={物件名:'property_name',延床面積:'total_floor_area',工事項目:'work_item',明細:'detail',数量:'quantity',単価:'unit_price',金額:'amount',作成日:'created_date'};
+function csvImport(input){
+  const file=input.files[0]; if(!file)return;
+  const reader=new FileReader();
+  reader.onload=()=>{
+    const text=String(reader.result).replace(/^﻿/,'');
+    const lines=text.split(/\r?\n/).filter(l=>l.trim());
+    if(lines.length<2){alert('データがありません');return;}
+    const headers=lines[0].split(',').map(h=>CSV_MAP[h.trim()]||h.trim());
+    let n=0;
+    lines.slice(1).forEach(line=>{
+      const c=line.split(','); const r={}; headers.forEach((h,i)=>r[h]=(c[i]||'').trim());
+      if(!r.work_item&&!r.property_name)return;
+      const q=+r.quantity||0,up=+r.unit_price||0;
+      DB.pastEstimates.push({id:uid(),property_name:r.property_name||'',total_floor_area:+r.total_floor_area||0,work_item:r.work_item||'',detail:r.detail||'',quantity:q,unit_price:up,amount:r.amount?+r.amount:q*up,created_date:r.created_date||''});
+      n++;
+    });
+    save();input.value='';alert(n+' 件を取り込みました');render();
+  };
+  reader.readAsText(file,'utf-8');
+}
+function csvTemplate(){
+  const csv='﻿物件名,延床面積,工事項目,明細,数量,単価,金額,作成日\nサンプル邸,105,基礎工事,ベタ基礎,56,28000,1568000,2025-06-01';
+  downloadFile('past_estimates_template.csv',csv,'text/csv');
+}
+
+/* ---- analytics ---- */
+function vAnalytics(){
+  const rows=analytics();
+  return head('単価分析','過去見積DBを工事項目別に集計。平均・中央値・最大・最小・最新単価・上昇率から概算単価の妥当性を検証します。')+
+   (rows.length?`<div class="card"><table><thead><tr><th>工事項目</th><th class="r">件数</th><th class="r">平均単価</th><th class="r">中央値</th><th class="r">最小</th><th class="r">最大</th><th class="r">最新単価</th><th class="r">上昇率</th></tr></thead><tbody>
+    ${rows.map(r=>`<tr><td><b>${esc(r.work_item)}</b></td><td class="r mut">${r.count}</td><td class="r"><b>${yen(r.avg)}</b></td><td class="r">${yen(r.median)}</td><td class="r mut">${yen(r.min)}</td><td class="r mut">${yen(r.max)}</td>
+      <td class="r">${yen(r.latest)}<div class="mut" style="font-size:10px">${r.latest_date}</div></td>
+      <td class="r"><span class="badge ${r.rise_rate>0?'b-red':r.rise_rate<0?'b-ok':'b-gray'}">${r.rise_rate>0?'▲':r.rise_rate<0?'▼':''} ${Math.abs(r.rise_rate)}%</span></td></tr>`).join('')}
+    </tbody></table></div>`:'<div class="card"><div class="empty">分析できる過去見積がありません。</div></div>')+
+   `<p class="mut" style="font-size:11px;margin-top:12px">※ 上昇率 =（最新単価 − 最古単価）÷ 最古単価 × 100</p>`;
+}
+
+/* ---- data backup ---- */
+function vData(){
+  return head('バックアップ / 設定','このアプリのデータはお使いのブラウザ内（localStorage）に保存されます。別PC・スマホへ移すにはエクスポートしたファイルをインポートしてください。')+
+  `<div class="card" style="max-width:640px"><div class="pad">
+    <div style="font-weight:700;margin-bottom:6px">データのエクスポート</div>
+    <p class="mut" style="font-size:12px;margin:0 0 12px">全データ（物件・マスター・概算・過去見積）をJSONファイルとして保存します。バックアップや別端末への移行に使います。</p>
+    <button class="btn pri" onclick="exportData()">📥 JSONをエクスポート</button>
+    <hr style="border:none;border-top:1px solid var(--line);margin:18px 0">
+    <div style="font-weight:700;margin-bottom:6px">データのインポート</div>
+    <p class="mut" style="font-size:12px;margin:0 0 12px">エクスポートしたJSONを読み込み、現在のデータを置き換えます。</p>
+    <button class="btn gh" onclick="document.getElementById('jsonfile').click()">📤 JSONをインポート</button>
+    <input id="jsonfile" type="file" accept=".json" style="display:none" onchange="importData(this)">
+    <hr style="border:none;border-top:1px solid var(--line);margin:18px 0">
+    <div style="font-weight:700;margin-bottom:6px;color:var(--red)">初期化</div>
+    <p class="mut" style="font-size:12px;margin:0 0 12px">全データを初期サンプルに戻します（取り消せません）。</p>
+    <button class="btn dn" onclick="resetAll()">🗑 初期サンプルに戻す</button>
+  </div></div>`;
+}
+function exportData(){downloadFile('housing_estimate_backup_'+new Date().toISOString().slice(0,10)+'.json',JSON.stringify(DB,null,2),'application/json');}
+function importData(input){
+  const file=input.files[0];if(!file)return;
+  const reader=new FileReader();
+  reader.onload=()=>{try{const o=JSON.parse(reader.result);if(!o.properties||!o.workItems)throw 0;DB=o;save();input.value='';alert('インポートしました');state.view='dashboard';render();}catch(e){alert('読み込めませんでした。正しいバックアップJSONを選んでください。');}};
+  reader.readAsText(file,'utf-8');
+}
+function downloadFile(name,content,type){
+  const blob=new Blob([content],{type:type+';charset=utf-8'});const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');a.href=url;a.download=name;a.click();URL.revokeObjectURL(url);
+}
+
+/* ---- boot ---- */
+load();render();
+</script>
+</body>
+</html>

@@ -53,7 +53,7 @@ function seed() {
     ]},
     { name: '木工事', calc: 'floor_area', leaves: [
       { name: '構造材・建方', unit: '㎡', price: 42000, cost: 33000, calc: 'sw_factor', note: 'SW工法で割増' },
-      { name: '造作工事', unit: '㎡', price: 18000, cost: 14000, calc: 'room_factor' },
+      { name: '造作工事', unit: '㎡', price: 18000, cost: 14000, calc: 'floor_area' },
     ]},
     { name: '屋根工事', calc: 'building_area', leaves: [
       { name: 'ガルバリウム屋根', unit: '㎡', price: 9500, cost: 7200, calc: 'building_area' },
