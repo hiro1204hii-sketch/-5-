@@ -101,7 +101,7 @@
    住宅概算・原価管理システム  — スタンドアロン(1ファイル)版
    データはブラウザの localStorage に保存。サーバー不要。
    ========================================================================= */
-const LS_KEY = 'hes_standalone_v2';
+const LS_KEY = 'hes_standalone_v3';
 const yen = n => '¥' + Math.round(Number(n||0)).toLocaleString('ja-JP');
 const yens = n => (n>=0?'+':'−') + '¥' + Math.abs(Math.round(n)).toLocaleString('ja-JP');
 const num = n => Number(n||0).toLocaleString('ja-JP');
@@ -118,15 +118,17 @@ const CALC = {
 const GRADES = [{k:'standard',l:'標準'},{k:'high',l:'上位'},{k:'premium',l:'最上位'}];
 const CATS = ['キッチン','浴室','洗面','トイレ','給湯器','換気','エアコン','建具','フローリング','外壁','屋根'];
 
-/* ---------------- seed ---------------- */
-function seed(){
-  const coefficients = [
+/* ---------------- seed / empty ---------------- */
+function coefDefaults(){return [
     {type:'room',key:'3',value:.95},{type:'room',key:'4',value:1},{type:'room',key:'5',value:1.06},{type:'room',key:'6',value:1.12},
     {type:'floor',key:'1',value:.92},{type:'floor',key:'2',value:1},{type:'floor',key:'3',value:1.15},
     {type:'sw',key:'on',value:1.12},{type:'sw',key:'off',value:1},
     {type:'gx',key:'on',value:1.08},{type:'gx',key:'off',value:1},
     {type:'grade',key:'standard',value:1},{type:'grade',key:'high',value:1.15},{type:'grade',key:'premium',value:1.3},
-  ];
+];}
+function emptyDB(){return {customers:[],properties:[],workItems:[],priceHistory:[],equipment:[],options:[],specSets:[],estimates:[],pastEstimates:[],coefficients:coefDefaults()};}
+function seed(){
+  const coefficients = coefDefaults();
   // 大項目 > 中項目 > 小項目(工種) の3階層
   const groups = [
     ['仮設工事',[['共通仮設',[['仮設足場','㎡',1200,950,'floor_area'],['養生・clean','式',80000,60000,'lump_sum']]]]],
@@ -186,10 +188,15 @@ function seed(){
   const stdCats=['キッチン','浴室','洗面','トイレ','外壁','屋根'];
   const mkSet=(name,note)=>({id:uid(),name,note,items:stdCats.map(c=>{const e=equipment.find(x=>x.category===c&&x.is_standard);return{category:c,equipment_id:e?e.id:null}})});
   const specSets=[mkSet('SW標準仕様','SW工法 標準パッケージ'),mkSet('一般標準仕様','一般工法 標準パッケージ')];
+  const customers=[
+    {id:uid(),name:'山田 太郎',kana:'ヤマダ タロウ',phone:'090-1234-5678',email:'yamada@example.com',address:'長野県松本市〇〇1-2-3',note:'紹介客',created_at:dAgo(40)},
+    {id:uid(),name:'佐藤 花子',kana:'サトウ ハナコ',phone:'080-2222-3333',email:'',address:'長野県塩尻市△△4-5',note:'二世帯希望',created_at:dAgo(30)},
+    {id:uid(),name:'鈴木 一郎',kana:'スズキ イチロウ',phone:'070-4444-5555',email:'suzuki@example.com',address:'長野県安曇野市□□6-7',note:'',created_at:dAgo(22)},
+  ];
   const properties=[
-    {id:uid(),name:'A様邸 新築工事',total_floor_area:105.2,building_area:58.4,site_area:165,floors:2,rooms:4,is_two_household:0,is_sw:1,insulation_grade:6,seismic_grade:2,is_long_life:1,is_gx:1,note:'SW工法・長期優良',created_at:dAgo(5)},
-    {id:uid(),name:'B様邸 二世帯住宅',total_floor_area:142.6,building_area:78.2,site_area:210.5,floors:2,rooms:6,is_two_household:1,is_sw:1,insulation_grade:6,seismic_grade:3,is_long_life:1,is_gx:0,note:'二世帯',created_at:dAgo(12)},
-    {id:uid(),name:'C様邸 平屋プラン',total_floor_area:88,building_area:88,site_area:200,floors:1,rooms:3,is_two_household:0,is_sw:0,insulation_grade:5,seismic_grade:2,is_long_life:0,is_gx:0,note:'平屋',created_at:dAgo(20)},
+    {id:uid(),customer_id:customers[0].id,name:'A様邸 新築工事',total_floor_area:105.2,building_area:58.4,site_area:165,floors:2,rooms:4,is_two_household:0,is_sw:1,insulation_grade:6,seismic_grade:2,is_long_life:1,is_gx:1,note:'SW工法・長期優良',created_at:dAgo(5)},
+    {id:uid(),customer_id:customers[1].id,name:'B様邸 二世帯住宅',total_floor_area:142.6,building_area:78.2,site_area:210.5,floors:2,rooms:6,is_two_household:1,is_sw:1,insulation_grade:6,seismic_grade:3,is_long_life:1,is_gx:0,note:'二世帯',created_at:dAgo(12)},
+    {id:uid(),customer_id:customers[2].id,name:'C様邸 平屋プラン',total_floor_area:88,building_area:88,site_area:200,floors:1,rooms:3,is_two_household:0,is_sw:0,insulation_grade:5,seismic_grade:2,is_long_life:0,is_gx:0,note:'平屋',created_at:dAgo(20)},
   ];
   const pe=(p,fa,wi,d,q,up,date)=>({id:uid(),property_name:p,total_floor_area:fa,work_item:wi,detail:d,quantity:q,unit_price:up,amount:q*up,created_date:date});
   const pastEstimates=[
@@ -202,14 +209,20 @@ function seed(){
     pe('過去物件1',102,'内装工事','クロス工事',320,1350,'2024-04-10'),pe('過去物件2',110,'内装工事','クロス工事',350,1450,'2024-09-15'),
     pe('過去物件3',98,'内装工事','クロス工事',300,1500,'2025-02-20'),
   ];
-  return {properties,workItems,priceHistory,equipment,options,specSets,estimates:[],pastEstimates,coefficients};
+  return {customers,properties,workItems,priceHistory,equipment,options,specSets,estimates:[],pastEstimates,coefficients};
 }
 
 /* ---------------- store ---------------- */
 let DB;
-function load(){ try{const r=localStorage.getItem(LS_KEY);if(r){DB=JSON.parse(r);return}}catch(e){} DB=seed();save(); }
+function load(){
+  try{const r=localStorage.getItem(LS_KEY);if(r){DB=JSON.parse(r);}}catch(e){DB=null;}
+  if(!DB){DB=emptyDB();save();}            // 初回は空の状態で開始（サンプルは入れない）
+  // 後方互換: 不足配列を補完
+  ['customers','properties','workItems','priceHistory','equipment','options','specSets','estimates','pastEstimates','coefficients'].forEach(k=>{if(!Array.isArray(DB[k]))DB[k]=k==='coefficients'?coefDefaults():[];});
+}
 function save(){ localStorage.setItem(LS_KEY,JSON.stringify(DB)); }
-function resetAll(){ if(confirm('全データを初期サンプルに戻します。よろしいですか？')){DB=seed();save();render();} }
+function clearAll(){ if(confirm('顧客・物件・工事項目・住設・オプション・標準仕様・概算・過去見積をすべて削除して空にします。よろしいですか？（取り消せません）')){DB=emptyDB();save();state.view='dashboard';specSel=null;render();} }
+function loadSample(){ if(confirm('現在のデータを置き換えて、動作確認用のサンプルデータを読み込みます。よろしいですか？')){DB=seed();save();state.view='dashboard';specSel=null;render();} }
 
 /* ---------------- calc engine (calc.ts 移植) ---------------- */
 function coef(type,key){const c=DB.coefficients.find(x=>x.type===type&&x.key===String(key));return c?c.value:1;}
@@ -291,6 +304,7 @@ function analytics(){
 /* ===================== UI ===================== */
 const NAV=[
   {v:'dashboard',label:'ダッシュボード',ic:'▤'},
+  {v:'customers',label:'顧客管理',ic:'👤'},
   {v:'properties',label:'物件管理',ic:'🏠'},
   {v:'estimate-new',label:'概算見積作成',ic:'🧮'},
   {v:'estimates',label:'概算見積一覧',ic:'📄'},
@@ -327,7 +341,7 @@ function closeModal(){document.getElementById('modal-root').innerHTML='';}
 function render(){
   renderNav();
   const v=state.view, el=document.getElementById('view');
-  const fn={dashboard:vDashboard,properties:vProperties,workitems:vWorkItems,equipment:vEquipment,options:vOptions,
+  const fn={dashboard:vDashboard,customers:vCustomers,properties:vProperties,workitems:vWorkItems,equipment:vEquipment,options:vOptions,
     specs:vSpecs,'estimate-new':vEstimateNew,estimates:vEstimates,'estimate-detail':vEstimateDetail,past:vPast,analytics:vAnalytics,data:vData}[v];
   el.innerHTML=fn?fn():'<div class="empty">準備中</div>';
   if(v==='estimate-new') ecAfterRender();
@@ -371,10 +385,51 @@ function vDashboard(){
     </div></div>`;
 }
 
+/* ---- customers ---- */
+function custName(id){const c=DB.customers.find(x=>x.id===id);return c?c.name:'';}
+function vCustomers(){
+  const rows=DB.customers.map(c=>{
+    const props=DB.properties.filter(p=>p.customer_id===c.id);
+    return `<tr>
+      <td><b>${esc(c.name)}</b>${c.kana?`<div class="mut" style="font-size:11px">${esc(c.kana)}</div>`:''}</td>
+      <td>${esc(c.phone||'')}</td><td class="mut">${esc(c.email||'')}</td><td class="mut">${esc(c.address||'')}</td>
+      <td>${props.length?props.map(p=>`<span class="badge b-gray">${esc(p.name)}</span>`).join(' '):'<span class="mut">—</span>'}</td>
+      <td class="r"><span class="lnk" onclick="custEdit(${c.id})">編集</span> <span class="lnk red" onclick="custDel(${c.id})">削除</span></td></tr>`;
+  }).join('');
+  return head('顧客管理','顧客情報を登録・管理します。物件は顧客に紐づけられ、概算の対象顧客が分かります。',`<button class="btn pri" onclick="custEdit(0)">＋ 顧客を登録</button>`)+
+   `<div class="card"><table><thead><tr><th>氏名</th><th>電話</th><th>メール</th><th>住所</th><th>物件</th><th></th></tr></thead><tbody>${rows}</tbody></table>${DB.customers.length?'':'<div class="empty">顧客がいません。右上の「＋ 顧客を登録」から追加してください。</div>'}</div>`;
+}
+function custEdit(id){
+  const c=id?DB.customers.find(x=>x.id===id):{name:'',kana:'',phone:'',email:'',address:'',note:''};
+  modal(id?'顧客を編集':'顧客を登録',
+   `<div class="grid" style="grid-template-columns:1fr 1fr">
+     <label class="f"><span>氏名 *</span><input id="c_name" value="${esc(c.name)}" placeholder="山田 太郎"></label>
+     <label class="f"><span>フリガナ</span><input id="c_kana" value="${esc(c.kana||'')}"></label>
+     <label class="f"><span>電話</span><input id="c_phone" value="${esc(c.phone||'')}"></label>
+     <label class="f"><span>メール</span><input id="c_email" value="${esc(c.email||'')}"></label></div>
+    <label class="f" style="margin-top:12px"><span>住所</span><input id="c_address" value="${esc(c.address||'')}"></label>
+    <label class="f" style="margin-top:12px"><span>備考</span><textarea id="c_note" rows="2">${esc(c.note||'')}</textarea></label>
+    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px"><button class="btn gh" onclick="closeModal()">キャンセル</button><button class="btn pri" onclick="custSave(${id})">保存</button></div>`,true);
+}
+function custSave(id){
+  const g=k=>document.getElementById('c_'+k);
+  const name=g('name').value.trim(); if(!name)return alert('氏名は必須です');
+  const obj={name,kana:g('kana').value,phone:g('phone').value,email:g('email').value,address:g('address').value,note:g('note').value};
+  if(id){Object.assign(DB.customers.find(x=>x.id===id),obj);}else{DB.customers.push({id:uid(),created_at:todayISO(),...obj});}
+  save();closeModal();render();
+}
+function custDel(id){
+  const props=DB.properties.filter(p=>p.customer_id===id);
+  if(!confirm('この顧客を削除します。'+(props.length?'紐づく物件('+props.length+'件)の顧客欄は空になります。':'')+'よろしいですか？'))return;
+  DB.properties.forEach(p=>{if(p.customer_id===id)p.customer_id=null;});
+  DB.customers=DB.customers.filter(x=>x.id!==id);
+  save();render();
+}
+
 /* ---- properties ---- */
 function vProperties(){
   const rows=DB.properties.map(p=>`<tr>
-    <td><b>${esc(p.name)}</b></td><td>${p.total_floor_area}㎡</td><td>${p.building_area}㎡</td><td>${p.floors}階</td><td>${p.rooms}</td>
+    <td><b>${esc(p.name)}</b>${p.customer_id?`<div class="mut" style="font-size:11px">👤 ${esc(custName(p.customer_id))}</div>`:''}</td><td>${p.total_floor_area}㎡</td><td>${p.building_area}㎡</td><td>${p.floors}階</td><td>${p.rooms}</td>
     <td>${p.is_sw?'<span class="badge b-ok">SW</span> ':''}${p.is_gx?'<span class="badge b-warn">GX</span> ':''}${p.is_two_household?'<span class="badge b-vio">二世帯</span> ':''}${p.is_long_life?'<span class="badge b-sky">長期優良</span>':''}</td>
     <td class="r"><span class="lnk" onclick="propEdit(${p.id})">編集</span> <span class="lnk red" onclick="propDel(${p.id})">削除</span></td></tr>`).join('');
   return head('物件管理','面積・階数・各種フラグが計算方式・補正係数に反映されます。',`<button class="btn pri" onclick="propEdit(0)">＋ 物件を登録</button>`)+
@@ -385,7 +440,10 @@ function propEdit(id){
   const f=(k,l,t='number')=>`<label class="f"><span>${l}</span><input id="p_${k}" type="${t}" value="${esc(p[k])}"></label>`;
   const ck=(k,l)=>`<label class="chip ${p[k]?'on':''}" style="justify-content:center" onclick="this.classList.toggle('on')" data-k="${k}"><input type="checkbox" ${p[k]?'checked':''} style="display:none">${l}</label>`;
   modal(id?'物件を編集':'物件を登録',
-    `<label class="f"><span>物件名 *</span><input id="p_name" value="${esc(p.name)}" placeholder="〇〇様邸 新築工事"></label>
+    `<div class="grid" style="grid-template-columns:1fr 1fr">
+       <label class="f"><span>物件名 *</span><input id="p_name" value="${esc(p.name)}" placeholder="〇〇様邸 新築工事"></label>
+       <label class="f"><span>顧客</span><select id="p_customer"><option value="">（未設定）</option>${DB.customers.map(c=>`<option value="${c.id}" ${c.id===p.customer_id?'selected':''}>${esc(c.name)}</option>`).join('')}</select></label>
+     </div>
      <div class="grid" style="grid-template-columns:1fr 1fr 1fr;margin-top:12px">
        ${f('total_floor_area','延床面積(㎡)')}${f('building_area','建築面積(㎡)')}${f('site_area','敷地面積(㎡)')}
        ${f('floors','階数')}${f('rooms','部屋数')}<div></div>${f('insulation_grade','断熱等級')}${f('seismic_grade','耐震等級')}<div></div></div>
@@ -398,7 +456,8 @@ function propSave(id){
   const g=k=>document.getElementById('p_'+k);
   const name=g('name').value.trim(); if(!name)return alert('物件名は必須です');
   const flags={}; document.querySelectorAll('[data-k]').forEach(e=>flags[e.dataset.k]=e.classList.contains('on')?1:0);
-  const obj={name,total_floor_area:+g('total_floor_area').value||0,building_area:+g('building_area').value||0,site_area:+g('site_area').value||0,
+  const cid=document.getElementById('p_customer').value;
+  const obj={name,customer_id:cid?+cid:null,total_floor_area:+g('total_floor_area').value||0,building_area:+g('building_area').value||0,site_area:+g('site_area').value||0,
     floors:+g('floors').value||0,rooms:+g('rooms').value||0,insulation_grade:+g('insulation_grade').value||0,seismic_grade:+g('seismic_grade').value||0,note:g('note').value,...flags};
   if(id){Object.assign(DB.properties.find(x=>x.id===id),obj);}else{DB.properties.push({id:uid(),created_at:todayISO(),...obj});}
   save();closeModal();render();
@@ -755,9 +814,13 @@ function vData(){
     <button class="btn gh" onclick="document.getElementById('jsonfile').click()">📤 JSONをインポート</button>
     <input id="jsonfile" type="file" accept=".json" style="display:none" onchange="importData(this)">
     <hr style="border:none;border-top:1px solid var(--line);margin:18px 0">
-    <div style="font-weight:700;margin-bottom:6px;color:var(--red)">初期化</div>
-    <p class="mut" style="font-size:12px;margin:0 0 12px">全データを初期サンプルに戻します（取り消せません）。</p>
-    <button class="btn dn" onclick="resetAll()">🗑 初期サンプルに戻す</button>
+    <div style="font-weight:700;margin-bottom:6px">サンプルデータ</div>
+    <p class="mut" style="font-size:12px;margin:0 0 12px">動作確認用のサンプル（顧客・物件・工事項目など）を読み込みます。現在のデータは置き換わります。</p>
+    <button class="btn gh" onclick="loadSample()">📦 サンプルデータを読み込む</button>
+    <hr style="border:none;border-top:1px solid var(--line);margin:18px 0">
+    <div style="font-weight:700;margin-bottom:6px;color:var(--red)">全データを空にする</div>
+    <p class="mut" style="font-size:12px;margin:0 0 12px">すべてのデータ（顧客・物件・各マスター・概算・過去見積）を削除して空にします。自分のデータをゼロから入力するときに使います。<b>取り消せません。</b></p>
+    <button class="btn dn" onclick="clearAll()">🗑 全データを空にする</button>
   </div></div>`;
 }
 function exportData(){downloadFile('housing_estimate_backup_'+new Date().toISOString().slice(0,10)+'.json',JSON.stringify(DB,null,2),'application/json');}
