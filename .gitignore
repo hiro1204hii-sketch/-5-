@@ -1,0 +1,21 @@
+# Node
+node_modules/
+.expo/
+dist/
+build/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Env / secrets
+.env
+.env.local
+
+# Editor
+.vscode/
+.idea/
+
+# Expo
+*.orig.*
+web-build/

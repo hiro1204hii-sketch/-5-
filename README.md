@@ -6,7 +6,7 @@
 | フォルダ | プロジェクト | 概要 | 技術 |
 |---|---|---|---|
 | [`housing-estimate-system/`](./housing-estimate-system) | 住宅概算・原価管理システム | 工務店向け概算見積システム（Phase1 MVP）。概算精度の継続的向上を目的に、単価履歴・標準仕様差額・過去見積を蓄積。 | React + TypeScript + Tailwind / Node + Express / SQLite |
-| [`sodateru-eigyo-techo/`](./sodateru-eigyo-techo) | 育てる営業手帳 | 商談録音 → AI分析アプリ。Web版ワイヤーフレーム（HTML）とモバイルアプリ（React Native）。 | HTML / React Native (Expo) |
+| [`sodateru-eigyo-techo/`](./sodateru-eigyo-techo) | 育てる営業手帳 | 商談録音 → AI分析Webアプリ（SPA）＋モバイルアプリ（React Native）。顧客管理・パイプライン・AIコーチ機能付き。 | HTML/CSS/JS (ゼロ依存) / React Native (Expo) |
 
 ## 各プロジェクトの始め方
 
@@ -16,8 +16,11 @@
 # 住宅概算・原価管理システム
 cd housing-estimate-system        # README.md を参照
 
+# 育てる営業手帳（Web）
+open sodateru-eigyo-techo/index.html   # ブラウザで開くだけ、設定不要
+
 # 育てる営業手帳（モバイル）
-cd sodateru-eigyo-techo/mobile    # SETUP.md を参照
+cd sodateru-eigyo-techo/mobile && npm install && npx expo start
 ```
 
 > 各プロジェクトは独立しているため、一方の変更が他方へ影響することはありません。
