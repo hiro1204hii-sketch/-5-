@@ -1,0 +1,10 @@
+{
+  "name": "housing-estimate-system",
+  "version": "1.0.0",
+  "private": true,
+  "description": "住宅概算・原価管理システム（単一サービスで起動・デプロイ）",
+  "scripts": {
+    "build": "bash scripts/build.sh",
+    "start": "node backend/dist/index.js"
+  }
+}

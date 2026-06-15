@@ -286,6 +286,14 @@ cd backend && npm run build      # tsc 型チェック＋出力
 cd frontend && npm run build     # vite build
 ```
 
+### 単一サービスで起動（本番/デプロイ向け）
+バックエンドがビルド済みフロントも配信するため、**1ポートで画面もAPIも動く**。
+```bash
+npm run build    # フロント→バックの配信ディレクトリへ取り込み
+npm start        # http://localhost:4000 で画面もAPIも提供
+```
+クラウド(Render)へのデプロイ手順・スマホ/PCからの閲覧方法は **[DEPLOY.md](./DEPLOY.md)** を参照。
+
 ---
 
 ## 5. API一覧

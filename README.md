@@ -22,3 +22,9 @@ cd sodateru-eigyo-techo/mobile    # SETUP.md を参照
 
 > 各プロジェクトは独立しているため、一方の変更が他方へ影響することはありません。
 > 新しいプロジェクトを追加する場合も、必ずルート直下に専用フォルダを作成して分離してください。
+
+## デプロイ
+
+- ルートの [`render.yaml`](./render.yaml) は **住宅概算・原価管理システム** を Render に
+  ワンクリック近くでデプロイするための Blueprint です（GitHub連携・無料プラン）。
+- 手順とローカル起動方法は [`housing-estimate-system/DEPLOY.md`](./housing-estimate-system/DEPLOY.md) を参照してください。

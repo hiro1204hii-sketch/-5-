@@ -1,5 +1,7 @@
 import express from 'express';
 import cors from 'cors';
+import path from 'path';
+import fs from 'fs';
 import { seedIfEmpty } from './lib/seed';
 import { CALC_METHODS } from './lib/calc';
 import { db } from './lib/db';
@@ -47,6 +49,18 @@ app.use('/api/standard-specs', standardSpecsRouter);
 app.use('/api/estimates', estimatesRouter);
 app.use('/api/past-estimates', pastEstimatesRouter);
 app.use('/api/analytics', analyticsRouter);
+
+// 本番（単一サービス構成）: ビルド済みフロントエンドを配信する。
+// build時に frontend/dist を backend/dist/public へコピーする（scripts/build.sh）。
+const publicDir = path.join(__dirname, 'public');
+if (fs.existsSync(publicDir)) {
+  app.use(express.static(publicDir));
+  // SPA フォールバック: /api 以外のパスは index.html を返す（クライアントルーティング用）
+  app.get(/^\/(?!api\/).*/, (_req, res) => {
+    res.sendFile(path.join(publicDir, 'index.html'));
+  });
+  console.log('[backend] フロントエンドを配信中 (単一サービス構成)');
+}
 
 const PORT = Number(process.env.PORT || 4000);
 app.listen(PORT, () => {
