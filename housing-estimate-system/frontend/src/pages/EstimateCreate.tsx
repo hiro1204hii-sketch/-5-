@@ -35,9 +35,9 @@ export default function EstimateCreate() {
     );
   }, []);
 
-  // 標準仕様セット選択時：カテゴリ別の標準住設を自動セット
+  // 標準仕様セット選択時：カテゴリ別の標準住設を自動セット。未選択に戻したら住設選択をクリア
   useEffect(() => {
-    if (!specSetId) return;
+    if (!specSetId) { setEqSel({}); return; }
     api.get<SpecDetail>(`/standard-specs/${specSetId}`).then((d) => {
       const map: Record<string, number> = {};
       for (const it of d.items) if (it.equipment_id) map[it.category] = it.equipment_id;

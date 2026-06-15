@@ -13,6 +13,7 @@ optionsRouter.get('/', (req, res) => {
 
 optionsRouter.post('/', (req, res) => {
   const b = req.body || {};
+  if (!b.category || !b.name) return res.status(400).json({ error: 'カテゴリとオプション名は必須です' });
   const info = db
     .prepare('INSERT INTO options (category,name,cost,sale_price,note) VALUES (?,?,?,?,?)')
     .run(b.category ?? '', b.name ?? '', Number(b.cost ?? 0), Number(b.sale_price ?? 0), b.note ?? '');

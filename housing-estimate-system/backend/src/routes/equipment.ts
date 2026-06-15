@@ -14,6 +14,8 @@ equipmentRouter.get('/', (req, res) => {
 });
 
 equipmentRouter.post('/', (req, res) => {
+  const b = req.body || {};
+  if (!b.category || !b.product_name) return res.status(400).json({ error: 'カテゴリと商品名は必須です' });
   const now = nowISO();
   const info = db
     .prepare(

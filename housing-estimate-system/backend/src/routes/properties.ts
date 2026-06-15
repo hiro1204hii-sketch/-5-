@@ -22,6 +22,7 @@ propertiesRouter.get('/:id', (req, res) => {
 
 propertiesRouter.post('/', (req, res) => {
   const b = req.body || {};
+  if (!b.name || !String(b.name).trim()) return res.status(400).json({ error: '物件名は必須です' });
   const now = nowISO();
   const stmt = db.prepare(
     `INSERT INTO properties (name,total_floor_area,building_area,site_area,floors,rooms,is_two_household,is_sw,insulation_grade,seismic_grade,is_long_life,is_gx,note,created_at,updated_at)
