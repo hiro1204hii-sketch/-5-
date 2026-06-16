@@ -677,11 +677,25 @@ function baseDel(id){
   save();render();
 }
 
-/* ---- 単価取込（Excel/PDFをコピー＆貼り付け） ---- */
-let IMP={rows:[],map:{}};
+/* ---- 単価取込（Excel / PDF を直接読み込み + コピペ） ---- */
+let IMP={rows:[],map:{},parent:null};
+function loadScript(src){return new Promise((res,rej)=>{const s=document.createElement('script');s.src=src;s.onload=()=>res();s.onerror=()=>rej(new Error('load fail'));document.head.appendChild(s);});}
+async function ensureXLSX(){ if(window.XLSX)return; await loadScript('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js'); }
+async function ensurePDF(){ if(window.pdfjsLib)return; await loadScript('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js'); try{window.pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';}catch(e){} }
+function impGuess(){
+  IMP.map={}; const r1=IMP.rows[0]||[], r2=IMP.rows[1]||[]; let gotVendor=false;
+  r1.forEach((c,i)=>{
+    const sample=String((r2[i]!=null?r2[i]:c)||'').replace(/[^0-9.]/g,'');
+    if(i===0) IMP.map[i]='工種名';
+    else if(!gotVendor && /^\d{2,}$/.test(sample)){ IMP.map[i]='業者単価'; gotVendor=true; }
+    else IMP.map[i]='無視';
+  });
+}
 function vImport(){
   const parents=DB.workItems.filter(w=>w.level<=4).sort((a,b)=>(a.sort||0)-(b.sort||0));
-  const parentOpts=parents.map(w=>`<option value="${w.id}">${esc(pathOf(w))} → ${LEVELNAME[w.level+1]||'子項目'}として追加</option>`).join('');
+  if((IMP.parent==null||!parents.some(p=>p.id===IMP.parent)) && parents[0]) IMP.parent=parents[0].id;
+  const tgt=parents.find(p=>p.id===IMP.parent);
+  const parentOpts=parents.map(w=>`<option value="${w.id}" ${w.id===IMP.parent?'selected':''}>${esc(pathOf(w))} → ${LEVELNAME[w.level+1]||'子項目'}として追加</option>`).join('');
   const baseOpts=DB.bases.map(b=>`<option value="${b.id}">${esc(b.name)}</option>`).join('');
   let preview='';
   if(IMP.rows.length){
@@ -690,25 +704,34 @@ function vImport(){
     const sel=i=>`<select onchange="IMP.map[${i}]=this.value">${roles.map(o=>`<option ${IMP.map[i]===o?'selected':''}>${o}</option>`).join('')}</select>`;
     preview=`<div class="card" style="margin-top:14px"><div class="ct">プレビュー（${IMP.rows.length}行）— 各列の意味を選んでください</div>
       <div class="scroll"><table><thead><tr>${Array.from({length:cols}).map((_,i)=>`<th>${sel(i)}</th>`).join('')}</tr></thead>
-      <tbody>${IMP.rows.slice(0,30).map(r=>`<tr>${Array.from({length:cols}).map((_,i)=>`<td>${esc(r[i]||'')}</td>`).join('')}</tr>`).join('')}</tbody></table></div>
+      <tbody>${IMP.rows.slice(0,40).map(r=>`<tr>${Array.from({length:cols}).map((_,i)=>`<td>${esc(r[i]||'')}</td>`).join('')}</tr>`).join('')}</tbody></table></div>
       <div class="pad">
-        <div class="grid" style="grid-template-columns:1fr 1fr 1fr">
-          <label class="f"><span>取込先（この下に追加）</span><select id="imp_parent">${parentOpts||'<option value="">（先に大項目/中項目を作成）</option>'}</select></label>
+        <div class="grid" style="grid-template-columns:1fr 1fr">
           <label class="f"><span>掛ける相手（既定）</span><select id="imp_base"><option value="">（なし）</option>${baseOpts}</select></label>
           <label class="f"><span>掛け率（列が無い時の既定）</span><input id="imp_markup" type="number" step="0.01" value="1.2"></label>
         </div>
         <label class="f" style="margin-top:10px"><span>取込モード</span><select id="imp_mode"><option value="add">新規追加（工種を作成）</option><option value="update">単価更新（工種名が一致する末端の業者単価を更新）</option></select></label>
-        <div style="margin-top:12px"><button class="btn pri" onclick="impRun()">この内容で取り込む</button> <button class="btn gh" onclick="IMP.rows=[];render()">クリア</button></div>
+        <div style="margin-top:12px"><button class="btn pri" onclick="impRun()">取込先「${esc(tgt?tgt.name:'')}」に取り込む</button> <button class="btn gh" onclick="IMP.rows=[];render()">クリア</button></div>
       </div></div>`;
   }
-  return head('単価取込（Excel / PDF）','Excelやスプレッドシートのセル範囲をコピーして貼り付け（タブ区切り）／PDFの表をコピーして貼り付け／CSVを貼り付けて「解析」。列の意味を指定して工種・単価を一括取込します。')+
+  return head('単価取込（Excel / PDF / コピペ）','① 取込先（大項目・中項目）を選び、② Excel(.xlsx)・PDFを直接読み込み（または貼り付け）、③ 列の意味を指定して一括取込します。')+
    `<div class="card"><div class="pad">
-     <label class="f"><span>ここに貼り付け（Excelのセルをコピー＝タブ区切り、CSVも可）</span>
-       <textarea id="imp_text" rows="8" placeholder="例）&#10;ベタ基礎&#9;㎡&#9;22000&#9;1.27&#10;クロス工事&#9;㎡&#9;1100&#9;1.35"></textarea></label>
-     <div style="margin-top:10px"><button class="btn pri" onclick="impParse()">解析する</button>
-       <button class="btn gh" onclick="document.getElementById('imp_file').click()" style="margin-left:6px">CSVファイルを選ぶ</button>
-       <input id="imp_file" type="file" accept=".csv,.txt" style="display:none" onchange="impFile(this)"></div>
-     <div class="mut" style="font-size:11px;margin-top:8px">※ .xlsx / .pdf の直接読み込みは未対応です。Excel・PDFは中身を選択コピーして上の欄に貼り付けてください（オフラインで確実・軽量）。</div>
+     <label class="f"><span>① 取込先（大項目 / 中項目を指定）</span>
+       <select onchange="IMP.parent=+this.value;render()">${parentOpts||'<option value="">（先に工事項目マスターで大項目/中項目を作成してください）</option>'}</select></label>
+     <div style="margin-top:14px;font-weight:700;font-size:13px">② ファイルを読み込む（選んだ取込先に入ります）</div>
+     <div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:8px">
+       <button class="btn pri" onclick="document.getElementById('imp_xlsx').click()">📊 Excel(.xlsx)を読み込む</button>
+       <button class="btn pri" onclick="document.getElementById('imp_pdf').click()">📄 PDFを読み込む</button>
+       <button class="btn gh" onclick="document.getElementById('imp_file').click()">CSVを読み込む</button>
+       <input id="imp_xlsx" type="file" accept=".xlsx,.xls" style="display:none" onchange="impExcel(this)">
+       <input id="imp_pdf" type="file" accept=".pdf" style="display:none" onchange="impPDF(this)">
+       <input id="imp_file" type="file" accept=".csv,.txt" style="display:none" onchange="impFile(this)">
+     </div>
+     <div class="mut" style="font-size:11px;margin-top:6px">※ Excel/PDFの解析には初回のみインターネット接続が必要です（PC側で解析部品を取得）。取得できない環境では下の貼り付けをご利用ください。PDFは表の配置により列がずれることがあります（取込前にプレビューで列指定を調整できます）。</div>
+     <div style="margin-top:14px;font-weight:700;font-size:13px">または 貼り付け（オフライン可）</div>
+     <label class="f" style="margin-top:6px"><span>Excelのセルをコピー（タブ区切り）／PDFの表をコピー／CSVを貼り付け</span>
+       <textarea id="imp_text" rows="6" placeholder="例）&#10;ベタ基礎&#9;㎡&#9;22000&#9;1.27&#10;クロス工事&#9;㎡&#9;1100&#9;1.35"></textarea></label>
+     <div style="margin-top:10px"><button class="btn gh" onclick="impParse()">貼り付けを解析する</button></div>
    </div></div>`+preview;
 }
 function impParse(){ impParseText(document.getElementById('imp_text').value||''); }
@@ -719,15 +742,47 @@ function impParseText(t){
   if(!lines.length){alert('データがありません');return;}
   const delim = lines[0].indexOf('\t')>=0 ? '\t' : ',';
   IMP.rows=lines.map(l=>l.split(delim).map(c=>c.trim()));
-  IMP.map={}; const r1=IMP.rows[0], r2=IMP.rows[1]||[];
-  r1.forEach((c,i)=>{ if(i===0)IMP.map[i]='工種名'; else if(/^\d[\d,]{2,}/.test((r2[i]||c).replace(/[^0-9,]/g,''))&&IMP.map_vendor!==true){IMP.map[i]='業者単価';IMP.map_vendor=true;} else IMP.map[i]='無視'; });
-  IMP.map_vendor=false;
-  render();
+  impGuess(); render();
+}
+async function impExcel(input){
+  const f=input.files[0]; if(!f)return; input.value='';
+  try{ await ensureXLSX(); }catch(e){ alert('Excel解析用の部品を取得できませんでした（オフラインの可能性）。Excelの中身をコピーして貼り付け欄をご利用ください。'); return; }
+  try{
+    const wb=XLSX.read(new Uint8Array(await f.arrayBuffer()),{type:'array'});
+    const ws=wb.Sheets[wb.SheetNames[0]];
+    const aoa=XLSX.utils.sheet_to_json(ws,{header:1,blankrows:false,defval:''});
+    IMP.rows=aoa.map(r=>r.map(c=>String(c==null?'':c).trim())).filter(r=>r.some(c=>c!==''));
+    if(!IMP.rows.length){alert('データが見つかりませんでした');return;}
+    impGuess(); render();
+  }catch(e){ alert('Excelの読み込みに失敗しました: '+e.message); }
+}
+async function impPDF(input){
+  const f=input.files[0]; if(!f)return; input.value='';
+  try{ await ensurePDF(); }catch(e){ alert('PDF解析用の部品を取得できませんでした（オフラインの可能性）。PDFの表を選択コピーして貼り付け欄をご利用ください。'); return; }
+  try{
+    const pdf=await pdfjsLib.getDocument({data:new Uint8Array(await f.arrayBuffer())}).promise;
+    const rows=[];
+    for(let pn=1;pn<=pdf.numPages;pn++){
+      const page=await pdf.getPage(pn);
+      const tc=await page.getTextContent();
+      const lines={};
+      tc.items.forEach(it=>{ if(!it.str||!it.str.trim())return; const y=Math.round(it.transform[5]/3)*3; (lines[y]=lines[y]||[]).push({x:it.transform[4],w:it.width||0,s:it.str}); });
+      Object.keys(lines).map(Number).sort((a,b)=>b-a).forEach(y=>{
+        const items=lines[y].sort((a,b)=>a.x-b.x);
+        const cells=[]; let cur='',lastEnd=null;
+        items.forEach(it=>{ if(lastEnd!=null && it.x-lastEnd>12){cells.push(cur.trim());cur='';} cur+=it.s; lastEnd=it.x+(it.w||it.s.length*4); });
+        if(cur.trim())cells.push(cur.trim());
+        const line=cells.filter(c=>c!=='');
+        if(line.length)rows.push(line);
+      });
+    }
+    if(!rows.length){alert('PDFから文字を取得できませんでした（画像化されたPDFの可能性）。貼り付けをお試しください。');return;}
+    IMP.rows=rows; impGuess(); render();
+  }catch(e){ alert('PDFの読み込みに失敗しました: '+e.message); }
 }
 function impRun(){
-  const ps=document.getElementById('imp_parent'); const parentId=ps&&ps.value?+ps.value:0;
-  const parent=DB.workItems.find(w=>w.id===parentId);
-  if(!parent){alert('取込先を選んでください');return;}
+  const parentId=IMP.parent; const parent=DB.workItems.find(w=>w.id===parentId);
+  if(!parent){alert('取込先（大項目/中項目）を選んでください');return;}
   const childLevel=Math.min(5,parent.level+1);
   const defBase=document.getElementById('imp_base').value?+document.getElementById('imp_base').value:'';
   const defMarkup=+document.getElementById('imp_markup').value||1;
@@ -751,7 +806,7 @@ function impRun(){
       added++;
     }
   });
-  save(); IMP.rows=[]; alert('取込完了：追加 '+added+' 件 / 更新 '+updated+' 件');
+  save(); IMP.rows=[]; alert('取込完了：追加 '+added+' 件 / 更新 '+updated+' 件（取込先: '+parent.name+'）');
   state.view='workitems'; render();
 }
 
