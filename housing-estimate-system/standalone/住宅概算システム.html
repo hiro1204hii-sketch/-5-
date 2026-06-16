@@ -85,7 +85,7 @@
   <aside class="side" id="side">
     <div class="brand"><div class="logo">概</div><div><b>住宅概算・原価管理</b><small>スタンドアロン版 / Phase1</small></div></div>
     <nav class="nav" id="nav"></nav>
-    <div class="foot">目的: 概算精度の継続的向上<br>データはこのブラウザに保存されます</div>
+    <div class="foot"><div>目的: 概算精度の継続的向上</div><div id="foot" style="margin-top:4px">保存先: このブラウザ内</div></div>
   </aside>
   <main class="main">
     <div class="wrap">
@@ -214,15 +214,75 @@ function seed(){
 
 /* ---------------- store ---------------- */
 let DB;
+function ensureArrays(){ ['customers','properties','workItems','priceHistory','equipment','options','specSets','estimates','pastEstimates','coefficients'].forEach(k=>{if(!Array.isArray(DB[k]))DB[k]=k==='coefficients'?coefDefaults():[];}); }
 function load(){
   try{const r=localStorage.getItem(LS_KEY);if(r){DB=JSON.parse(r);}}catch(e){DB=null;}
-  if(!DB){DB=emptyDB();save();}            // 初回は空の状態で開始（サンプルは入れない）
-  // 後方互換: 不足配列を補完
-  ['customers','properties','workItems','priceHistory','equipment','options','specSets','estimates','pastEstimates','coefficients'].forEach(k=>{if(!Array.isArray(DB[k]))DB[k]=k==='coefficients'?coefDefaults():[];});
+  if(!DB){DB=emptyDB();}        // 初回は空の状態で開始（サンプルは入れない）
+  ensureArrays(); saveLocal();
 }
-function save(){ localStorage.setItem(LS_KEY,JSON.stringify(DB)); }
+function saveLocal(){ localStorage.setItem(LS_KEY,JSON.stringify(DB)); }
+function save(){ saveLocal(); scheduleFileWrite(); }   // ブラウザ保存＋（設定時は）ファイルへ自動保存
 function clearAll(){ if(confirm('顧客・物件・工事項目・住設・オプション・標準仕様・概算・過去見積をすべて削除して空にします。よろしいですか？（取り消せません）')){DB=emptyDB();save();state.view='dashboard';specSel=null;render();} }
 function loadSample(){ if(confirm('現在のデータを置き換えて、動作確認用のサンプルデータを読み込みます。よろしいですか？')){DB=seed();save();state.view='dashboard';specSel=null;render();} }
+
+/* ---------------- パソコンのファイルに保存 (File System Access API) ---------------- */
+const FSA = (typeof window!=='undefined') && ('showSaveFilePicker' in window);
+let fileHandle=null, autoSave=false, pendingReconnect=false, _fwT=null;
+function idbReq(fn){return new Promise((res,rej)=>{const o=indexedDB.open('hes_fs',1);o.onupgradeneeded=()=>o.result.createObjectStore('h');o.onsuccess=()=>fn(o.result,res,rej);o.onerror=()=>rej(o.error);});}
+function idbSet(k,v){return idbReq((db,res,rej)=>{const t=db.transaction('h','readwrite');t.objectStore('h').put(v,k);t.oncomplete=()=>res();t.onerror=()=>rej(t.error);});}
+function idbGet(k){return idbReq((db,res,rej)=>{const t=db.transaction('h','readonly');const r=t.objectStore('h').get(k);r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);});}
+function idbDel(k){return idbReq((db,res,rej)=>{const t=db.transaction('h','readwrite');t.objectStore('h').delete(k);t.oncomplete=()=>res();t.onerror=()=>rej(t.error);});}
+function scheduleFileWrite(){ if(!autoSave||!fileHandle)return; clearTimeout(_fwT); _fwT=setTimeout(fileWrite,400); }
+async function fileWrite(){ if(!fileHandle)return; try{const w=await fileHandle.createWritable();await w.write(JSON.stringify(DB,null,2));await w.close();}catch(e){console.warn('file write',e);} }
+async function fileSaveAs(){
+  if(!FSA){ exportData(); return; }
+  try{
+    const h=await window.showSaveFilePicker({suggestedName:'住宅概算データ.json',types:[{description:'JSONデータ',accept:{'application/json':['.json']}}]});
+    fileHandle=h; autoSave=true; pendingReconnect=false; try{await idbSet('handle',h);}catch(e){}
+    await fileWrite();
+    alert('保存先ファイルを設定しました。これ以降の変更は自動でこのファイルに保存されます。');
+    render();
+  }catch(e){ if(e&&e.name==='AbortError')return; alert('直接保存が使えなかったため、ダウンロード方式に切り替えます。'); exportData(); }
+}
+async function fileOpen(){
+  if(!FSA){ document.getElementById('jsonfile').click(); return; }
+  try{
+    const [h]=await window.showOpenFilePicker({types:[{description:'JSONデータ',accept:{'application/json':['.json']}}]});
+    const o=JSON.parse(await (await h.getFile()).text());
+    if(typeof o!=='object'||(!o.workItems&&!o.customers&&!o.properties))throw new Error('住宅概算データのファイルではないようです');
+    DB=o; ensureArrays(); fileHandle=h; autoSave=true; pendingReconnect=false; try{await idbSet('handle',h);}catch(e){}
+    saveLocal();
+    alert('ファイルを開きました。これ以降の変更は自動でこのファイルに保存されます。');
+    state.view='dashboard'; specSel=null; render();
+  }catch(e){ if(e&&e.name==='AbortError')return; alert('開けませんでした: '+e.message); }
+}
+async function fileReconnectClick(){
+  if(!fileHandle){ try{fileHandle=await idbGet('handle');}catch(e){} }
+  if(!fileHandle){ alert('保存先ファイルが設定されていません。'); return; }
+  try{
+    const p=await fileHandle.requestPermission({mode:'readwrite'});
+    if(p!=='granted'){ alert('ファイルへのアクセスが許可されませんでした。'); return; }
+    const o=JSON.parse(await (await fileHandle.getFile()).text()); DB=o; ensureArrays(); saveLocal();
+    autoSave=true; pendingReconnect=false;
+    alert('保存先ファイルに再接続しました。'); state.view='dashboard'; specSel=null; render();
+  }catch(e){ alert('再接続できませんでした: '+e.message); }
+}
+async function fileDisconnect(){ autoSave=false; fileHandle=null; pendingReconnect=false; try{await idbDel('handle');}catch(e){} alert('ファイル保存を解除しました（以降はブラウザ内のみ保存）。'); render(); }
+async function fileBoot(){
+  if(!FSA)return;
+  try{ const h=await idbGet('handle'); if(!h)return; fileHandle=h;
+    const p=await h.queryPermission({mode:'readwrite'});
+    if(p==='granted'){ try{const o=JSON.parse(await (await h.getFile()).text());DB=o;ensureArrays();saveLocal();}catch(e){} autoSave=true; }
+    else { pendingReconnect=true; }
+    render();
+  }catch(e){}
+}
+function updateFoot(){
+  const f=document.getElementById('foot'); if(!f)return;
+  if(autoSave&&fileHandle) f.innerHTML='保存先: 💾 ファイルに自動保存中';
+  else if(pendingReconnect) f.innerHTML='保存先: ⚠ ファイル未接続 <span class="lnk" style="color:#93c5fd" onclick="fileReconnectClick()">再接続</span>';
+  else f.innerHTML='保存先: このブラウザ内';
+}
 
 /* ---------------- calc engine (calc.ts 移植) ---------------- */
 function coef(type,key){const c=DB.coefficients.find(x=>x.type===type&&x.key===String(key));return c?c.value:1;}
@@ -339,7 +399,7 @@ function closeModal(){document.getElementById('modal-root').innerHTML='';}
 
 /* ============ views ============ */
 function render(){
-  renderNav();
+  renderNav(); updateFoot();
   const v=state.view, el=document.getElementById('view');
   const fn={dashboard:vDashboard,customers:vCustomers,properties:vProperties,workitems:vWorkItems,equipment:vEquipment,options:vOptions,
     specs:vSpecs,'estimate-new':vEstimateNew,estimates:vEstimates,'estimate-detail':vEstimateDetail,past:vPast,analytics:vAnalytics,data:vData}[v];
@@ -803,15 +863,24 @@ function vAnalytics(){
 
 /* ---- data backup ---- */
 function vData(){
-  return head('バックアップ / 設定','このアプリのデータはお使いのブラウザ内（localStorage）に保存されます。別PC・スマホへ移すにはエクスポートしたファイルをインポートしてください。')+
-  `<div class="card" style="max-width:640px"><div class="pad">
-    <div style="font-weight:700;margin-bottom:6px">データのエクスポート</div>
-    <p class="mut" style="font-size:12px;margin:0 0 12px">全データ（物件・マスター・概算・過去見積）をJSONファイルとして保存します。バックアップや別端末への移行に使います。</p>
-    <button class="btn pri" onclick="exportData()">📥 JSONをエクスポート</button>
+  const status = (autoSave&&fileHandle)?'<span class="badge b-ok">💾 ファイルに自動保存中</span>'
+    : pendingReconnect?'<span class="badge b-warn">⚠ 保存先ファイル未接続</span> <button class="btn gh sm" onclick="fileReconnectClick()">再接続</button>'
+    : '<span class="badge b-gray">このブラウザ内のみ</span>';
+  return head('バックアップ / 設定','データの保存先を選べます。「パソコンのファイルに保存」を設定すると、以降の変更が自動でそのファイルに書き込まれ、Word/Excelのようにファイルとして残せます。')+
+  `<div class="card" style="max-width:680px"><div class="pad">
+    <div style="font-weight:700;margin-bottom:4px">📂 パソコンのファイルに保存（おすすめ）</div>
+    <p class="mut" style="font-size:12px;margin:0 0 8px">保存先ファイルを1つ決めると、以降の入力は<b>自動でそのファイルに保存</b>されます。次回は「ファイルを開く」または下の「再接続」で続きから編集できます。</p>
+    <div style="margin:0 0 10px">現在の保存先: ${status}</div>
+    ${FSA?`<button class="btn pri" onclick="fileSaveAs()">💾 保存先ファイルを設定</button>
+      <button class="btn gh" onclick="fileOpen()">📂 ファイルを開く</button>
+      ${(autoSave&&fileHandle)?'<button class="btn gh" onclick="fileDisconnect()">ファイル保存を解除</button>':''}
+      <p class="mut" style="font-size:11px;margin:10px 0 0">※ Chrome / Edge で利用できます。初回はファイルへのアクセス許可を求められます。</p>`
+     :`<p class="note">このブラウザは「直接ファイル保存」に未対応です（Safari / Firefox など）。下の「エクスポート / インポート」をお使いください。Chrome または Edge なら直接保存が使えます。</p>`}
     <hr style="border:none;border-top:1px solid var(--line);margin:18px 0">
-    <div style="font-weight:700;margin-bottom:6px">データのインポート</div>
-    <p class="mut" style="font-size:12px;margin:0 0 12px">エクスポートしたJSONを読み込み、現在のデータを置き換えます。</p>
-    <button class="btn gh" onclick="document.getElementById('jsonfile').click()">📤 JSONをインポート</button>
+    <div style="font-weight:700;margin-bottom:6px">エクスポート / インポート（どのブラウザでも可）</div>
+    <p class="mut" style="font-size:12px;margin:0 0 12px">全データを1つのJSONファイルとして保存／読み込みします。バックアップや別PC・スマホへの移行に使います。</p>
+    <button class="btn gh" onclick="exportData()">📥 ファイルに書き出す</button>
+    <button class="btn gh" onclick="document.getElementById('jsonfile').click()">📤 ファイルから読み込む</button>
     <input id="jsonfile" type="file" accept=".json" style="display:none" onchange="importData(this)">
     <hr style="border:none;border-top:1px solid var(--line);margin:18px 0">
     <div style="font-weight:700;margin-bottom:6px">サンプルデータ</div>
@@ -836,7 +905,7 @@ function downloadFile(name,content,type){
 }
 
 /* ---- boot ---- */
-load();render();
+load();render();fileBoot();
 </script>
 </body>
 </html>
