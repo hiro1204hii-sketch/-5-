@@ -803,28 +803,56 @@ async function impExcel(input){
     impGuess(); render();
   }catch(e){ alert('Excelの読み込みに失敗しました: '+e.message); }
 }
+// --- PDF表抽出（ヘッダー基準の列割り当て：複数業者・異なるレイアウトに対応） ---
+function pdfNumOf(v){return +String(v||'').replace(/[^0-9.\-]/g,'')||0;}
+function pdfClassify(s){const t=String(s).replace(/\s/g,'');
+  if(/(内容|工事内容|品名|名称|摘要|工種|項目|仕様|区分)/.test(t))return'name';
+  if(/(数量|員数|本数)/.test(t)||t==='数')return'qty';
+  if(/単位/.test(t)||t==='位')return'unit';
+  if(/単価/.test(t))return'price';
+  if(/(金額|価格)/.test(t))return'amount';
+  if(/備考/.test(t))return'note';
+  return'ignore';}
+function pdfClusterLines(items,tol){const its=items.filter(it=>it.s&&it.s.trim()).sort((a,b)=>b.y-a.y);const lines=[];let cur=null;
+  its.forEach(it=>{if(cur&&Math.abs(it.y-cur.y)<=tol){cur.items.push(it);}else{cur={y:it.y,items:[it]};lines.push(cur);}});
+  lines.forEach(l=>l.items.sort((a,b)=>a.x-b.x));return lines;}
+function pdfIsHeader(line){const roles=new Set(line.items.map(it=>pdfClassify(it.s)));let c=0;['name','qty','unit','price','amount'].forEach(r=>{if(roles.has(r))c++;});return c>=2&&(roles.has('qty')||roles.has('amount'))&&(roles.has('price')||roles.has('amount'));}
+function pdfHeaderCols(line){const cols=line.items.map(it=>({x:it.x,role:pdfClassify(it.s),label:String(it.s).replace(/\s/g,'')}));cols.sort((a,b)=>a.x-b.x);
+  if(!cols.some(c=>c.role==='name')){const cand=cols.find(c=>c.role==='ignore'&&!/^(no\.?|№|番号)$/i.test(c.label));if(cand)cand.role='name';}return cols;}
+function pdfAssignRow(line,cols){const buf=cols.map(()=> '');
+  line.items.forEach(it=>{let bi=0,best=1e9;cols.forEach((c,i)=>{const d=Math.abs(it.x-c.x);if(d<best){best=d;bi=i;}});buf[bi]+=it.s;});
+  const row={name:'',unit:'',qty:0,price:0,amount:0};
+  cols.forEach((c,i)=>{const v=buf[i].trim();if(!v)return;
+    if(c.role==='name')row.name+=(row.name?' ':'')+v;else if(c.role==='unit')row.unit+=v;
+    else if(c.role==='qty')row.qty=pdfNumOf(v);else if(c.role==='price')row.price=pdfNumOf(v);
+    else if(c.role==='amount')row.amount=pdfNumOf(v);});
+  return row;}
+const PDF_SKIP=/^(小計|合計|消費税|御見積|見積金額|総額|値引額|備考|調整|税抜|税込|端数|合\s*計|計$)/;
 async function impPDF(input){
   const f=input.files[0]; if(!f)return; input.value='';
   try{ await ensurePDF(); }catch(e){ alert('PDF解析用の部品を取得できませんでした（オフラインの可能性）。PDFの表を選択コピーして貼り付け欄をご利用ください。'); return; }
   try{
     const pdf=await pdfjsLib.getDocument({data:new Uint8Array(await f.arrayBuffer())}).promise;
-    const rows=[];
+    const out=[];
     for(let pn=1;pn<=pdf.numPages;pn++){
       const page=await pdf.getPage(pn);
       const tc=await page.getTextContent();
-      const lines={};
-      tc.items.forEach(it=>{ if(!it.str||!it.str.trim())return; const y=Math.round(it.transform[5]/3)*3; (lines[y]=lines[y]||[]).push({x:it.transform[4],w:it.width||0,s:it.str}); });
-      Object.keys(lines).map(Number).sort((a,b)=>b-a).forEach(y=>{
-        const items=lines[y].sort((a,b)=>a.x-b.x);
-        const cells=[]; let cur='',lastEnd=null;
-        items.forEach(it=>{ if(lastEnd!=null && it.x-lastEnd>12){cells.push(cur.trim());cur='';} cur+=it.s; lastEnd=it.x+(it.w||it.s.length*4); });
-        if(cur.trim())cells.push(cur.trim());
-        const line=cells.filter(c=>c!=='');
-        if(line.length)rows.push(line);
+      const items=tc.items.map(it=>({x:it.transform[4],y:it.transform[5],w:it.width||0,s:it.str}));
+      const lines=pdfClusterLines(items,4);
+      let cols=null;
+      lines.forEach(line=>{
+        if(pdfIsHeader(line)){cols=pdfHeaderCols(line);return;}
+        if(!cols)return;
+        const r=pdfAssignRow(line,cols);
+        const nm=r.name.replace(/[（(].*?[）)]/g,'').trim();
+        if(!nm||PDF_SKIP.test(nm))return;
+        if(!(r.qty||r.price||r.amount))return;
+        out.push([nm, r.unit, r.qty||'', r.price||'', r.amount||'']);
       });
     }
-    if(!rows.length){alert('PDFから文字を取得できませんでした（画像化されたPDFの可能性）。貼り付けをお試しください。');return;}
-    IMP.rows=rows; impGuess(); render();
+    if(!out.length){alert('表を自動抽出できませんでした（特殊なレイアウト/画像PDFの可能性）。PDFの表を選択コピーして貼り付け欄をご利用ください。');return;}
+    IMP.rows=out; IMP.map={0:'工種名',1:'単位',2:'数量',3:'業者単価',4:'金額'};
+    render();
   }catch(e){ alert('PDFの読み込みに失敗しました: '+e.message); }
 }
 function impRun(){
