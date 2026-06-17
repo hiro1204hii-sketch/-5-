@@ -382,9 +382,6 @@ const NAV=[
   {v:'equipment',label:'住設マスター',ic:'🚿'},
   {v:'options',label:'オプションマスター',ic:'➕'},
   {v:'specs',label:'標準仕様管理',ic:'📐'},
-  {sec:'蓄積・分析'},
-  {v:'past',label:'過去見積DB',ic:'🗄'},
-  {v:'analytics',label:'単価分析',ic:'📈'},
   {sec:'データ'},
   {v:'data',label:'バックアップ/設定',ic:'⚙'},
 ];
@@ -457,16 +454,19 @@ function vDashboard(){
 /* ---- customers ---- */
 function custName(id){const c=DB.customers.find(x=>x.id===id);return c?c.name:'';}
 function vCustomers(){
+  const estCount=cid=>DB.estimates.filter(e=>{const p=DB.properties.find(x=>x.id===e.property_id);return p&&p.customer_id===cid;}).length;
   const rows=DB.customers.map(c=>{
     const props=DB.properties.filter(p=>p.customer_id===c.id);
+    const ec=estCount(c.id);
     return `<tr>
       <td><b>${esc(c.name)}</b>${c.kana?`<div class="mut" style="font-size:11px">${esc(c.kana)}</div>`:''}</td>
-      <td>${esc(c.phone||'')}</td><td class="mut">${esc(c.email||'')}</td><td class="mut">${esc(c.address||'')}</td>
+      <td>${esc(c.phone||'')}</td><td class="mut">${esc(c.address||'')}</td>
       <td>${props.length?props.map(p=>`<span class="badge b-gray">${esc(p.name)}</span>`).join(' '):'<span class="mut">—</span>'}</td>
+      <td class="r">${ec?`<span class="lnk" onclick="state.estCustomer=${c.id};go('estimates')">${ec}件</span>`:'<span class="mut">0</span>'}</td>
       <td class="r"><span class="lnk" onclick="custEdit(${c.id})">編集</span> <span class="lnk red" onclick="custDel(${c.id})">削除</span></td></tr>`;
   }).join('');
-  return head('顧客管理','顧客情報を登録・管理します。物件は顧客に紐づけられ、概算の対象顧客が分かります。',`<button class="btn pri" onclick="custEdit(0)">＋ 顧客を登録</button>`)+
-   `<div class="card"><table><thead><tr><th>氏名</th><th>電話</th><th>メール</th><th>住所</th><th>物件</th><th></th></tr></thead><tbody>${rows}</tbody></table>${DB.customers.length?'':'<div class="empty">顧客がいません。右上の「＋ 顧客を登録」から追加してください。</div>'}</div>`;
+  return head('顧客管理','顧客情報を登録・管理します。物件・概算は顧客に紐づき、顧客ごとの概算履歴を確認できます。',`<button class="btn pri" onclick="custEdit(0)">＋ 顧客を登録</button>`)+
+   `<div class="card"><table><thead><tr><th>氏名</th><th>電話</th><th>住所</th><th>物件</th><th class="r">概算</th><th></th></tr></thead><tbody>${rows}</tbody></table>${DB.customers.length?'':'<div class="empty">顧客がいません。右上の「＋ 顧客を登録」から追加してください。</div>'}</div>`;
 }
 function custEdit(id){
   const c=id?DB.customers.find(x=>x.id===id):{name:'',kana:'',phone:'',email:'',address:'',note:''};
@@ -544,23 +544,70 @@ function vWorkItems(){
   function node(w,depth){
     const kids=DB.workItems.filter(x=>x.parent_id===w.id).sort(bs);
     const leaf=kids.length===0;
+    const collapsed=WICOL.has(w.id);
+    const toggle = leaf ? '<span style="display:inline-block;width:14px"></span>'
+      : `<span class="lnk" style="display:inline-block;width:14px;color:#64748b" title="${collapsed?'開く':'閉じる'}" onclick="wiToggle(${w.id})">${collapsed?'▶':'▼'}</span>`;
     let costing='';
     if(leaf){
       if(w.base_id){
         const sale=Math.round((w.vendor_price||0)*(w.markup==null?1:w.markup));
         costing=`<span class="mut" style="font-size:12px">　業者 ${yen(w.vendor_price)} × 掛率 ${w.markup==null?1:w.markup} = <b style="color:#1d4ed8">売価 ${yen(sale)}/${esc(w.unit||'')}</b>　［${esc(baseName(w.base_id))}］</span>`;
       } else costing=`<span class="mut" style="font-size:12px">　（単価未設定）</span>`;
+    } else {
+      costing=`<span class="mut" style="font-size:12px">　${kids.length}件${collapsed?'（閉）':''}</span>`;
     }
     const addBtn = w.level<5 ? `<span class="lnk" onclick="wiAddChild(${w.id})">＋子項目</span> ・ ` : '';
     const row=`<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:7px 12px;border-top:1px solid #f1f5f9;padding-left:${12+depth*22}px">
-      <span style="min-width:0"><span class="badge ${badge[w.level]||'b-gray'}">${LEVELNAME[w.level]||('L'+w.level)}</span> <b>${esc(w.name)}</b>${costing}</span>
+      <span style="min-width:0">${toggle} <span class="badge ${badge[w.level]||'b-gray'}">${LEVELNAME[w.level]||('L'+w.level)}</span> <b>${esc(w.name)}</b>${costing}</span>
       <span style="white-space:nowrap;flex-shrink:0">${mv(w.id)} ・ ${addBtn}<span class="lnk" onclick="wiEdit(${w.id})">編集</span> ${leaf?`・ <span class="lnk" style="color:var(--muted)" onclick="wiHist(${w.id})">履歴</span> `:''}・ <span class="lnk red" onclick="wiDel(${w.id})">削除</span></span></div>`;
-    return row + kids.map(k=>node(k,depth+1)).join('');
+    return row + (collapsed ? '' : kids.map(k=>node(k,depth+1)).join(''));
   }
   const majors=DB.workItems.filter(w=>w.level===1).sort(bs);
   const blocks=majors.map(m=>`<div class="card" style="margin-bottom:12px">${node(m,0)}</div>`).join('');
-  return head('工事項目マスター','大項目 → 中項目 → 小項目①②③ の5階層。末端（子のない項目）に「業者単価 × 掛け率」で売価を設定。▲▼で並び替え、編集の「所属（移動先）」で自由に移動できます。',
-    `<button class="btn pri" onclick="wiAddMajor()">＋ 大項目を追加</button>`)+blocks+(majors.length?'':'<div class="card"><div class="empty">大項目がありません。右上の「＋ 大項目を追加」から登録してください。</div></div>');
+  const actions=`<button class="btn gh sm" onclick="wiCollapseAll(1)">すべて閉じる</button>
+    <button class="btn gh sm" onclick="wiCollapseAll(0)">すべて開く</button>
+    <button class="btn gh sm" onclick="wiBulkMarkup()">掛け率を一括設定</button>
+    <button class="btn pri" onclick="wiAddMajor()">＋ 大項目を追加</button>`;
+  return head('工事項目マスター','大項目 → 中項目 → 小項目①②③ の5階層。末端に「業者単価 × 掛け率」で売価を設定。▶▼で開閉、▲▼で並び替え、編集の「所属（移動先）」で中項目⇄小項目も移動できます。',actions)
+    +blocks+(majors.length?'':'<div class="card"><div class="empty">大項目がありません。右上の「＋ 大項目を追加」から登録してください。</div></div>');
+}
+let WICOL=new Set();
+function wiToggle(id){ if(WICOL.has(id))WICOL.delete(id); else WICOL.add(id); render(); }
+function wiCollapseAll(on){ WICOL=new Set(on?DB.workItems.filter(w=>DB.workItems.some(c=>c.parent_id===w.id)).map(w=>w.id):[]); render(); }
+function wiBulkMarkup(){
+  const bs=(a,b)=>(a.sort||0)-(b.sort||0);
+  const majors=DB.workItems.filter(w=>w.level===1).sort(bs);
+  const opts=`<option value="all">全体（すべての工種）</option>`+
+    majors.map(m=>{
+      const mids=DB.workItems.filter(w=>w.level===2&&w.parent_id===m.id).sort(bs);
+      return `<option value="maj:${m.id}">大項目: ${esc(m.name)}</option>`+
+        mids.map(mid=>`<option value="mid:${mid.id}">　中項目: ${esc(m.name)} ＞ ${esc(mid.name)}</option>`).join('');
+    }).join('');
+  modal('掛け率を一括設定',
+   `<p class="mut" style="font-size:12px;margin:0 0 10px">指定範囲の<b>末端（工種）すべて</b>の掛け率をまとめて設定します。業者単価（原価）はそのまま、売価＝業者単価×掛け率が更新されます。</p>
+    <label class="f"><span>対象範囲</span><select id="bm_scope">${opts}</select></label>
+    <label class="f" style="margin-top:12px"><span>掛け率</span><input id="bm_markup" type="number" step="0.01" value="1.2"></label>
+    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px"><button class="btn gh" onclick="closeModal()">キャンセル</button><button class="btn pri" onclick="wiBulkMarkupApply()">一括反映</button></div>`);
+}
+function wiBulkMarkupApply(){
+  const scope=document.getElementById('bm_scope').value;
+  const mk=+document.getElementById('bm_markup').value; if(!(mk>0))return alert('掛け率を入力してください');
+  const desc=id=>{ // id配下の全子孫idを集める
+    const set=new Set([id]); let ch=true;
+    while(ch){ch=false;DB.workItems.forEach(w=>{if(w.parent_id!=null&&set.has(w.parent_id)&&!set.has(w.id)){set.add(w.id);ch=true;}});}
+    return set;
+  };
+  let target;
+  if(scope==='all') target=null;
+  else { const [t,ids]=scope.split(':'); target=desc(+ids); }
+  let n=0;
+  DB.workItems.forEach(w=>{
+    const leaf=!DB.workItems.some(c=>c.parent_id===w.id);
+    if(!leaf||!w.base_id)return;
+    if(target&&!target.has(w.id))return;
+    w.markup=mk; w.updated_at=todayISO(); n++;
+  });
+  save(); closeModal(); render(); alert(n+' 件の工種に掛け率 '+mk+' を反映しました。');
 }
 function wiAddMajor(){ wiForm('add',0,1,null); }
 function wiAddChild(pid){ const p=DB.workItems.find(x=>x.id===pid); wiForm('add',0,Math.min(5,(p?p.level:0)+1),pid); }
@@ -700,7 +747,7 @@ function vImport(){
   let preview='';
   if(IMP.rows.length){
     const cols=Math.max(...IMP.rows.map(r=>r.length));
-    const roles=['無視','工種名','単位','業者単価','掛け率'];
+    const roles=['無視','工種名','単位','業者単価','数量','金額','掛け率'];
     const sel=i=>`<select onchange="IMP.map[${i}]=this.value">${roles.map(o=>`<option ${IMP.map[i]===o?'selected':''}>${o}</option>`).join('')}</select>`;
     preview=`<div class="card" style="margin-top:14px"><div class="ct">プレビュー（${IMP.rows.length}行）— 各列の意味を選んでください</div>
       <div class="scroll"><table><thead><tr>${Array.from({length:cols}).map((_,i)=>`<th>${sel(i)}</th>`).join('')}</tr></thead>
@@ -788,21 +835,25 @@ function impRun(){
   const defMarkup=+document.getElementById('imp_markup').value||1;
   const mode=document.getElementById('imp_mode').value;
   const colOf=role=>{for(const i in IMP.map)if(IMP.map[i]===role)return +i;return -1;};
-  const cName=colOf('工種名'),cUnit=colOf('単位'),cVendor=colOf('業者単価'),cMarkup=colOf('掛け率');
+  const cName=colOf('工種名'),cUnit=colOf('単位'),cVendor=colOf('業者単価'),cQty=colOf('数量'),cAmount=colOf('金額'),cMarkup=colOf('掛け率');
   if(cName<0)return alert('「工種名」の列を指定してください');
-  if(cVendor<0)return alert('「業者単価」の列を指定してください');
+  if(cVendor<0 && !(cQty>=0&&cAmount>=0))return alert('「業者単価」の列、または「数量」と「金額」の両方を指定してください');
+  const numOf=v=>+String(v||'').replace(/[^0-9.\-]/g,'')||0;
   const HEAD=['工種名','名称','工種','項目','品名','名前'];
   let added=0,updated=0;
   IMP.rows.forEach(r=>{
     const name=(r[cName]||'').trim(); if(!name||HEAD.includes(name))return;
-    const vendor=Math.round(+String(r[cVendor]||'').replace(/[^0-9.\-]/g,'')||0);
+    let vendor=cVendor>=0?Math.round(numOf(r[cVendor])):0;
+    const qty=cQty>=0?numOf(r[cQty]):0, amount=cAmount>=0?numOf(r[cAmount]):0;
+    if(!vendor && qty>0 && amount>0) vendor=Math.round(amount/qty); // 単価が無ければ 金額÷数量 で算出
     const unit=cUnit>=0?(r[cUnit]||''):'';
-    const markup=cMarkup>=0?(+String(r[cMarkup]||'').replace(/[^0-9.\-]/g,'')||defMarkup):defMarkup;
+    const markup=cMarkup>=0?(numOf(r[cMarkup])||defMarkup):defMarkup;
+    const refNote=(qty>0||amount>0)?`取込時 数量${qty||'-'} / 金額${amount? yen(amount):'-'}`:'';
     if(mode==='update'){
       const ex=DB.workItems.find(w=>w.name===name && isLeaf(w));
-      if(ex){ if((ex.vendor_price||0)!==vendor){DB.priceHistory.push({id:uid(),work_item_id:ex.id,name:ex.name,old_price:ex.vendor_price||0,new_price:vendor,old_cost:ex.vendor_price||0,new_cost:vendor,reason:'取込更新',changed_at:todayISO()});} ex.vendor_price=vendor; if(cUnit>=0)ex.unit=unit; if(cMarkup>=0)ex.markup=markup; ex.updated_at=todayISO(); updated++; }
+      if(ex){ if((ex.vendor_price||0)!==vendor){DB.priceHistory.push({id:uid(),work_item_id:ex.id,name:ex.name,old_price:ex.vendor_price||0,new_price:vendor,old_cost:ex.vendor_price||0,new_cost:vendor,reason:'取込更新',changed_at:todayISO()});} ex.vendor_price=vendor; if(cUnit>=0)ex.unit=unit; if(cMarkup>=0)ex.markup=markup; if(refNote)ex.note=refNote; ex.updated_at=todayISO(); updated++; }
     } else {
-      DB.workItems.push({id:uid(),parent_id:parentId,level:childLevel,name,unit,base_id:defBase,vendor_price:vendor,markup,sort:nextSort(childLevel,parentId),note:'',updated_at:todayISO()});
+      DB.workItems.push({id:uid(),parent_id:parentId,level:childLevel,name,unit,base_id:defBase,vendor_price:vendor,markup,sort:nextSort(childLevel,parentId),note:refNote,updated_at:todayISO()});
       added++;
     }
   });
@@ -974,13 +1025,21 @@ function ecSave(){
 }
 
 /* ---- estimates list / detail ---- */
+function custOfEstimate(e){ const p=DB.properties.find(x=>x.id===e.property_id); return p&&p.customer_id?custName(p.customer_id):''; }
 function vEstimates(){
-  const rows=[...DB.estimates].sort((a,b)=>b.created_at<a.created_at?-1:1).map(e=>`<tr>
-    <td><span class="lnk" onclick="state.detailId=${e.id};go('estimate-detail')">${esc(e.name)}</span></td><td class="mut">${esc(e.property_name)}</td>
+  const filt=state.estCustomer;
+  let list=[...DB.estimates].sort((a,b)=>b.created_at<a.created_at?-1:1);
+  if(filt){ list=list.filter(e=>{const p=DB.properties.find(x=>x.id===e.property_id);return p&&p.customer_id===filt;}); }
+  const rows=list.map(e=>`<tr>
+    <td><span class="lnk" onclick="state.detailId=${e.id};go('estimate-detail')">${esc(e.name)}</span></td>
+    <td class="mut">${esc(custOfEstimate(e)||'—')}</td><td class="mut">${esc(e.property_name)}</td>
     <td class="r">${e.total_floor_area}㎡</td><td class="r"><b>${yen(e.total_sale)}</b></td><td class="r mut">${yen(e.total_cost)}</td><td class="mut" style="font-size:11px">${(e.created_at||'').slice(0,10)}</td>
     <td class="r"><span class="lnk red" onclick="estDel(${e.id})">削除</span></td></tr>`).join('');
-  return head('概算見積一覧','保存済みの概算。蓄積データが将来の精度向上に活用されます。',`<button class="btn pri" onclick="state.ecState=null;go('estimate-new')">＋ 新規作成</button>`)+
-   `<div class="card"><table><thead><tr><th>名称</th><th>物件</th><th class="r">延床</th><th class="r">概算売価</th><th class="r">概算原価</th><th>作成日</th><th></th></tr></thead><tbody>${rows}</tbody></table>${DB.estimates.length?'':'<div class="empty">概算見積がありません</div>'}</div>`;
+  const filtName=filt?custName(filt):'';
+  const desc=filt?`顧客「${filtName}」の概算履歴`:'保存済みの概算。顧客ごとに過去の概算が残ります。';
+  const action=(filt?`<button class="btn gh" onclick="state.estCustomer=null;render()">全件表示に戻す</button> `:'')+`<button class="btn pri" onclick="state.ecState=null;go('estimate-new')">＋ 新規作成</button>`;
+  return head('概算見積一覧',desc,action)+
+   `<div class="card"><table><thead><tr><th>名称</th><th>顧客</th><th>物件</th><th class="r">延床</th><th class="r">概算売価</th><th class="r">概算原価</th><th>作成日</th><th></th></tr></thead><tbody>${rows}</tbody></table>${list.length?'':'<div class="empty">概算見積がありません</div>'}</div>`;
 }
 function estDel(id){if(confirm('削除しますか？')){DB.estimates=DB.estimates.filter(x=>x.id!==id);save();render();}}
 function vEstimateDetail(){
