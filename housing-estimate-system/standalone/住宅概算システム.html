@@ -454,7 +454,7 @@ function vDashboard(){
 /* ---- customers ---- */
 function custName(id){const c=DB.customers.find(x=>x.id===id);return c?c.name:'';}
 function vCustomers(){
-  const estCount=cid=>DB.estimates.filter(e=>{const p=DB.properties.find(x=>x.id===e.property_id);return p&&p.customer_id===cid;}).length;
+  const estCount=cid=>DB.estimates.filter(e=>custIdOfEstimate(e)===cid).length;
   const rows=DB.customers.map(c=>{
     const props=DB.properties.filter(p=>p.customer_id===c.id);
     const ec=estCount(c.id);
@@ -1023,7 +1023,8 @@ function specSave(id){
 /* ---- estimate create ---- */
 function ecInit(){
   if(state.ecState)return;
-  state.ecState={property_id:DB.properties[0]?DB.properties[0].id:null,spec_set_id:DB.specSets[0]?DB.specSets[0].id:null,grade:'standard',equipment:{},options:[],manualQty:{},name:''};
+  const p0=DB.properties[0];
+  state.ecState={customer_id:(p0&&p0.customer_id)||(DB.customers[0]&&DB.customers[0].id)||null,property_id:p0?p0.id:null,spec_set_id:DB.specSets[0]?DB.specSets[0].id:null,equipment:{},options:[],manualQty:{},name:''};
   applySpecDefaults();
 }
 function applySpecDefaults(){
@@ -1036,10 +1037,16 @@ function vEstimateNew(){
   const qtyItems=DB.workItems.filter(w=>isLeaf(w)&&w.base_id&&(baseOf(w.base_id)||{}).source==='manual');
   const eqByCat=c=>DB.equipment.filter(e=>e.category===c);
   const optByCat=c=>DB.options.filter(o=>o.category===c);
+  const propsForCust = s.customer_id ? DB.properties.filter(p=>p.customer_id===s.customer_id) : DB.properties;
+  const propList = propsForCust.length ? propsForCust : DB.properties;
   const form=`<div>
     <div class="card" style="margin-bottom:16px"><div class="pad">
-      <div style="font-weight:700;font-size:13px;margin-bottom:10px">① 物件・標準仕様</div>
-      <label class="f"><span>物件</span><select onchange="ecSet('property_id',+this.value)">${DB.properties.map(p=>`<option value="${p.id}" ${p.id===s.property_id?'selected':''}>${esc(p.name)}（延床${p.total_floor_area}㎡）</option>`).join('')}</select></label>
+      <div style="font-weight:700;font-size:13px;margin-bottom:10px">① 顧客・物件</div>
+      <div class="grid" style="grid-template-columns:1fr 1fr">
+        <label class="f"><span>顧客</span><select onchange="ecSetCustomer(this.value)"><option value="">（未選択）</option>${DB.customers.map(c=>`<option value="${c.id}" ${c.id===s.customer_id?'selected':''}>${esc(c.name)}</option>`).join('')}</select></label>
+        <label class="f"><span>物件</span><select onchange="ecSetProperty(this.value)">${propList.map(p=>`<option value="${p.id}" ${p.id===s.property_id?'selected':''}>${esc(p.name)}（延床${p.total_floor_area}㎡）</option>`).join('')||'<option value="">（物件がありません）</option>'}</select></label>
+      </div>
+      <div class="mut" style="font-size:11px;margin-top:6px">顧客を選ぶと、その顧客の物件に絞り込まれます。${DB.customers.length?'':'顧客は「👤 顧客管理」で先に登録してください。'}${propsForCust.length===0&&s.customer_id?' ※この顧客の物件がまだ無いため全物件を表示中（「🏠 物件管理」で顧客を選んで物件登録を）。':''}</div>
       <label class="f" style="margin-top:10px"><span>標準仕様セット（住設の差額用・任意）</span><select onchange="ecSetSpec(this.value)"><option value="">（適用しない）</option>${DB.specSets.map(x=>`<option value="${x.id}" ${x.id===s.spec_set_id?'selected':''}>${esc(x.name)}</option>`).join('')}</select></label>
     </div></div>
     ${cats.length?`<div class="card" style="margin-bottom:16px"><div class="pad"><div style="font-weight:700;font-size:13px;margin-bottom:10px">② 住設の選択</div>
@@ -1089,6 +1096,8 @@ function ecResultHTML(){
 function ecAfterRender(){const r=document.getElementById('ec-result');if(r)r.innerHTML=ecResultHTML();}
 function ecUpdate(){const r=document.getElementById('ec-result');if(r)r.innerHTML=ecResultHTML();}
 function ecSet(k,v){state.ecState[k]=v;render();}
+function ecSetCustomer(v){ const s=state.ecState; s.customer_id=v?+v:null; const props=s.customer_id?DB.properties.filter(p=>p.customer_id===s.customer_id):DB.properties; s.property_id=props[0]?props[0].id:(DB.properties[0]?DB.properties[0].id:null); render(); }
+function ecSetProperty(v){ const s=state.ecState; s.property_id=v?+v:null; const p=DB.properties.find(x=>x.id===s.property_id); if(p&&p.customer_id)s.customer_id=p.customer_id; render(); }
 function ecSetSpec(v){state.ecState.spec_set_id=v?+v:null;applySpecDefaults();render();}
 function ecEq(c,id){state.ecState.equipment[c]=id;ecUpdate();}
 function ecOpt(id){const o=state.ecState.options;const i=o.indexOf(id);if(i<0)o.push(id);else o.splice(i,1);render();}
@@ -1096,18 +1105,19 @@ function ecQty(id,v){state.ecState.manualQty[id]=v===''?0:+v;ecUpdate();}
 function ecSave(){
   const s=state.ecState; const d=buildBreakdown(s); if(!d)return;
   const p=DB.properties.find(x=>x.id===s.property_id);
-  const est={id:uid(),property_id:s.property_id,property_name:p.name,total_floor_area:p.total_floor_area,name:s.name||(p.name+' 概算'),
+  const est={id:uid(),customer_id:s.customer_id||(p&&p.customer_id)||null,property_id:s.property_id,property_name:p.name,total_floor_area:p.total_floor_area,name:s.name||(p.name+' 概算'),
     created_at:todayISO(),total_sale:d.totals.total_sale,total_cost:d.totals.total_cost,
     workLines:d.workLines,equipmentLines:d.equipmentLines,optLines:d.optLines};
   DB.estimates.push(est);save();state.ecState=null;state.detailId=est.id;state.view='estimate-detail';render();
 }
 
 /* ---- estimates list / detail ---- */
-function custOfEstimate(e){ const p=DB.properties.find(x=>x.id===e.property_id); return p&&p.customer_id?custName(p.customer_id):''; }
+function custIdOfEstimate(e){ return e.customer_id || (DB.properties.find(x=>x.id===e.property_id)||{}).customer_id || null; }
+function custOfEstimate(e){ const cid=custIdOfEstimate(e); return cid?custName(cid):''; }
 function vEstimates(){
   const filt=state.estCustomer;
   let list=[...DB.estimates].sort((a,b)=>b.created_at<a.created_at?-1:1);
-  if(filt){ list=list.filter(e=>{const p=DB.properties.find(x=>x.id===e.property_id);return p&&p.customer_id===filt;}); }
+  if(filt){ list=list.filter(e=>custIdOfEstimate(e)===filt); }
   const rows=list.map(e=>`<tr>
     <td><span class="lnk" onclick="state.detailId=${e.id};go('estimate-detail')">${esc(e.name)}</span></td>
     <td class="mut">${esc(custOfEstimate(e)||'—')}</td><td class="mut">${esc(e.property_name)}</td>
@@ -1124,7 +1134,7 @@ function vEstimateDetail(){
   const e=DB.estimates.find(x=>x.id===state.detailId); if(!e)return '<div class="empty">見つかりません</div>';
   const dt=e.equipmentLines.reduce((s,x)=>s+x.diff,0);
   const et={total_sale:e.total_sale,total_cost:e.total_cost,gross_profit:e.total_sale-e.total_cost,gross_margin:e.total_sale>0?Math.round((e.total_sale-e.total_cost)/e.total_sale*1000)/10:0};
-  return head(e.name,`物件: ${e.property_name} ／ 延床 ${e.total_floor_area}㎡`,`<button class="btn gh" onclick="go('estimates')">一覧へ戻る</button>`)+
+  return head(e.name,`顧客: ${custOfEstimate(e)||'（未設定）'} ／ 物件: ${e.property_name} ／ 延床 ${e.total_floor_area}㎡`,`<button class="btn gh" onclick="go('estimates')">一覧へ戻る</button>`)+
    estSummary(et)
    +`<div class="card" style="margin-bottom:16px"><div class="ct">標準仕様との差額</div>
      <table><thead><tr><th>カテゴリ</th><th>選択住設</th><th class="r">標準</th><th class="r">選択</th><th class="r">ｵﾌﾟｼｮﾝ</th><th class="r">差額</th></tr></thead><tbody>
