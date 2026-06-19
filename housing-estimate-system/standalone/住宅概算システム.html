@@ -769,6 +769,7 @@ function impGuess(){
 }
 function impDelRow(i){ IMP.rows.splice(i,1); render(); }
 function vImport(){
+  if(KM) return kmPreview();
   const parents=DB.workItems.filter(w=>w.level<=4).sort((a,b)=>(a.sort||0)-(b.sort||0));
   if((IMP.parent==null||!parents.some(p=>p.id===IMP.parent)) && parents[0]) IMP.parent=parents[0].id;
   const tgt=parents.find(p=>p.id===IMP.parent);
@@ -799,13 +800,16 @@ function vImport(){
        <select onchange="IMP.parent=+this.value;render()">${parentOpts||'<option value="">（先に工事項目マスターで大項目/中項目を作成してください）</option>'}</select></label>
      <div style="margin-top:14px;font-weight:700;font-size:13px">② ファイルを読み込む（選んだ取込先に入ります）</div>
      <div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:8px">
-       <button class="btn pri" onclick="document.getElementById('imp_xlsx').click()">📊 Excel(.xlsx)を読み込む</button>
-       <button class="btn pri" onclick="document.getElementById('imp_pdf').click()">📄 PDFを読み込む</button>
-       <button class="btn gh" onclick="document.getElementById('imp_file').click()">CSVを読み込む</button>
+       <button class="btn pri" onclick="document.getElementById('km_file').click()">📑 見積革命CSVを読み込む（階層ごと）</button>
+       <button class="btn gh" onclick="document.getElementById('imp_xlsx').click()">📊 Excel(.xlsx)</button>
+       <button class="btn gh" onclick="document.getElementById('imp_pdf').click()">📄 PDF</button>
+       <button class="btn gh" onclick="document.getElementById('imp_file').click()">CSV(一般)</button>
+       <input id="km_file" type="file" accept=".csv,.txt" style="display:none" onchange="kmFile(this)">
        <input id="imp_xlsx" type="file" accept=".xlsx,.xls" style="display:none" onchange="impExcel(this)">
        <input id="imp_pdf" type="file" accept=".pdf" style="display:none" onchange="impPDF(this)">
        <input id="imp_file" type="file" accept=".csv,.txt" style="display:none" onchange="impFile(this)">
      </div>
+     <div class="mut" style="font-size:11px;margin-top:6px">見積革命のCSVは「📑 見積革命CSV」を使うと、大項目→工種を階層ごと自動復元し、顧客・物件・概算も作成します（Shift-JIS対応）。</div>
      <div class="mut" style="font-size:11px;margin-top:6px">※ Excel/PDFの解析には初回のみインターネット接続が必要です（PC側で解析部品を取得）。取得できない環境では下の貼り付けをご利用ください。PDFは表の配置により列がずれることがあります（取込前にプレビューで列指定を調整できます）。</div>
      <div style="margin-top:14px;font-weight:700;font-size:13px">または 貼り付け（オフライン可）</div>
      <label class="f" style="margin-top:6px"><span>Excelのセルをコピー（タブ区切り）／PDFの表をコピー／CSVを貼り付け</span>
@@ -931,6 +935,106 @@ function unitToBaseId(unit){
   if(/坪/.test(u)) return baseIdBySource('floor_tsubo');
   if(u===''||/^(式|一式)$/.test(u)) return baseIdBySource('fixed1');
   return baseIdBySource('manual'); // 本/個/箇所/ｍ/㎥/台/回/車/人工/日 等は手入力数量
+}
+
+/* ---- 見積革命CSV 取込（Shift-JIS・階層復元・顧客/物件作成・改定検出） ---- */
+let KM=null;
+function csvParse(t){const rows=[];let row=[],f='',q=false;t=t.replace(/^﻿/,'');
+  for(let i=0;i<t.length;i++){const c=t[i];
+    if(q){ if(c==='"'){ if(t[i+1]==='"'){f+='"';i++;} else q=false; } else f+=c; }
+    else { if(c==='"')q=true; else if(c===','){row.push(f);f='';} else if(c==='\r'){} else if(c==='\n'){row.push(f);rows.push(row);row=[];f='';} else f+=c; } }
+  if(f.length||row.length){row.push(f);rows.push(row);} return rows;}
+function kmParse(text){
+  const rows=csvParse(text);
+  const hi=rows.findIndex(r=>r[0]==='階層'&&r.includes('名称')&&r.includes('見積単価'));
+  if(hi<0)return null;
+  const H=rows[hi], ci=n=>H.indexOf(n);
+  const C={lv:ci('階層'),dai:ci('大'),chu:ci('中'),no:ci('№'),kbn:ci('区分'),name:ci('名称'),spec:ci('規格・寸法'),unit:ci('単位'),qty:ci('見積数量'),price:ci('見積単価'),amt:ci('見積金額')};
+  const L=rows[0]||[], V=rows[1]||[], meta={}; L.forEach((k,i)=>{ if(k&&meta[k]==null)meta[k]=V[i]; });
+  let tsubo=0; rows.forEach(r=>{const m=(r||[]).join(' ').match(/施工面積\s*([0-9]+\.?[0-9]*)\s*坪/);if(m&&!tsubo)tsubo=+m[1];});
+  const info={customer:(meta['施主名称①']||'').trim(),project:(meta['工事名称①']||'').trim(),place:(V[12]||'').trim(),total:+(meta['見積合計金額']||0)||0,totalNoTax:+(meta['見積税抜き額']||0)||0,tsubo};
+  const koji={};
+  for(let i=hi+1;i<rows.length;i++){const r=rows[i];if(r[C.lv]==='1'&&r[C.dai]==='1'&&r[C.kbn]==='0'&&(r[C.name]||'').trim())koji[r[C.no]]=r[C.name].trim();}
+  const tree=[],byMajor={};let last=null;
+  for(let i=hi+1;i<rows.length;i++){const r=rows[i];
+    if(r[C.kbn]!=='0')continue;
+    if(r[C.lv]==='2'&&r[C.dai]==='1'){
+      const mn=koji[r[C.chu]]||('工事'+r[C.chu]);
+      const name=(r[C.name]||'').trim();
+      if(name===''){ if(last)last.spec=((last.spec||'')+' '+(r[C.spec]||'')).trim(); continue; }
+      let M=byMajor[mn]; if(!M){M={major:mn,items:[]};byMajor[mn]=M;tree.push(M);}
+      M.items.push(last={name,spec:(r[C.spec]||'').trim(),unit:(r[C.unit]||'').trim(),qty:+r[C.qty]||0,price:+r[C.price]||0,amt:+r[C.amt]||0});
+    }
+  }
+  return {info,tree};
+}
+function kmFile(input){const f=input.files[0];if(!f)return;input.value='';
+  const fr=new FileReader();
+  fr.onload=()=>{let text='';
+    try{text=new TextDecoder('shift_jis').decode(fr.result);}catch(e){}
+    if(!/階層/.test(text)){try{text=new TextDecoder('utf-8').decode(fr.result);}catch(e){}}
+    const km=kmParse(text);
+    if(!km){alert('見積革命形式として認識できませんでした（ヘッダー: 階層,大,中,…,名称,見積単価 が必要）。');return;}
+    KM=km; render();
+  };
+  fr.readAsArrayBuffer(f);
+}
+function kmPreview(){
+  const t=KM.tree; let items=0; t.forEach(M=>items+=M.items.length);
+  const rows=t.map(M=>`<tr><td><b>${esc(M.major)}</b></td><td class="r">${M.items.length}</td><td class="mut" style="font-size:12px">${esc(M.items.slice(0,3).map(i=>i.name).join('、'))}…</td></tr>`).join('');
+  return head('見積革命CSV 取込',`顧客「${esc(KM.info.customer||'—')}」／工事「${esc(KM.info.project||'—')}」を解析。大項目${t.length}・工種${items}件${KM.info.tsubo?'・施工面積'+KM.info.tsubo+'坪':''}。`,
+    `<button class="btn gh" onclick="KM=null;render()">キャンセル</button>`)+
+   `<div class="card" style="margin-bottom:14px"><div class="pad">
+     <div class="grid" style="grid-template-columns:1fr 1fr 1fr">
+       <label class="f"><span>見積単価は</span><select id="km_pricetype"><option value="sale">売価（見積単価）→掛け率で原価へ</option><option value="cost">そのまま原価として</option></select></label>
+       <label class="f"><span>掛け率（売価→原価の割戻し）</span><input id="km_markup" type="number" step="0.01" value="1.0"></label>
+       <div style="display:flex;flex-direction:column;gap:6px;justify-content:flex-end">
+         <label style="font-size:13px"><input type="checkbox" id="km_cust" checked> 顧客・物件も作成</label>
+         <label style="font-size:13px"><input type="checkbox" id="km_est" checked> この見積を概算履歴に残す</label>
+       </div>
+     </div>
+     <div style="margin-top:12px"><button class="btn pri" onclick="kmRun()">マスターに取込（大項目→工種を統合・改定検出）</button></div>
+     <div class="mut" style="font-size:11px;margin-top:6px">既存の同名工種は単価を更新（変更は履歴に記録）。新規は追加。掛ける相手は単位から自動判定。掛け率1.0なら売価＝原価のまま取り込み、後から一括で掛け率を設定できます。</div>
+   </div></div>
+   <div class="card"><table><thead><tr><th>大項目（工事）</th><th class="r">工種数</th><th>例</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+function kmRun(){
+  if(!KM)return;
+  const pType=document.getElementById('km_pricetype').value;
+  const mk=+document.getElementById('km_markup').value||1;
+  const makeCust=document.getElementById('km_cust').checked;
+  const makeEst=document.getElementById('km_est').checked;
+  let custId=null,propId=null,pname='';
+  if(makeCust&&KM.info.customer){
+    let c=DB.customers.find(x=>x.name===KM.info.customer);
+    if(!c){c={id:uid(),name:KM.info.customer,kana:'',phone:'',email:'',address:KM.info.place||'',note:'',created_at:todayISO()};DB.customers.push(c);}
+    custId=c.id; pname=KM.info.project||(KM.info.customer+'邸');
+    let p=DB.properties.find(x=>x.name===pname);
+    const fa=KM.info.tsubo?Math.round(KM.info.tsubo*3.305785*100)/100:0;
+    if(!p){p={id:uid(),customer_id:custId,name:pname,total_floor_area:fa,building_area:0,site_area:0,floors:2,rooms:4,is_two_household:0,is_sw:0,insulation_grade:4,seismic_grade:2,is_long_life:0,is_gx:0,note:KM.info.place||'',created_at:todayISO()};DB.properties.push(p);}
+    else if(!p.customer_id)p.customer_id=custId;
+    propId=p.id;
+  }
+  let added=0,updated=0; const estLines=[]; let sale=0,cost=0;
+  KM.tree.forEach(M=>{
+    let major=DB.workItems.find(w=>w.level===1&&w.name===M.major);
+    if(!major){major={id:uid(),parent_id:null,level:1,name:M.major,sort:nextSort(1,null),note:''};DB.workItems.push(major);}
+    M.items.forEach(it=>{
+      const vendor=pType==='sale'?Math.round(it.price/(mk||1)):Math.round(it.price);
+      const markup=pType==='sale'?mk:1;
+      const baseId=unitToBaseId(it.unit);
+      let ex=DB.workItems.find(w=>w.parent_id===major.id&&isLeaf(w)&&w.name===it.name);
+      if(ex){ if((ex.vendor_price||0)!==vendor){DB.priceHistory.push({id:uid(),work_item_id:ex.id,name:ex.name,old_price:ex.vendor_price||0,new_price:vendor,old_cost:ex.vendor_price||0,new_cost:vendor,reason:'見積革命取込',changed_at:todayISO()});} ex.vendor_price=vendor; ex.markup=markup; if(!ex.unit)ex.unit=it.unit; if(!ex.base_id)ex.base_id=baseId; ex.updated_at=todayISO(); updated++; }
+      else { DB.workItems.push({id:uid(),parent_id:major.id,level:3,name:it.name,unit:it.unit,base_id:baseId,vendor_price:vendor,markup,sort:nextSort(3,major.id),note:it.spec||'',updated_at:todayISO()}); added++; }
+      sale+=it.amt; cost+=Math.round(vendor*(it.qty||1));
+      estLines.push({category:M.major,work_item_name:it.name,unit:it.unit,base_name:it.unit,quantity:it.qty,vendor_price:vendor,markup,unit_sale:it.price,amount:it.amt,is_manual:false});
+    });
+  });
+  if(makeEst&&propId){
+    DB.estimates.push({id:uid(),customer_id:custId,property_id:propId,property_name:pname,total_floor_area:DB.properties.find(p=>p.id===propId).total_floor_area,name:(KM.info.project||'見積')+'（見積革命取込）',created_at:todayISO(),total_sale:KM.info.totalNoTax||sale,total_cost:cost,workLines:estLines,equipmentLines:[],optLines:[]});
+  }
+  save(); KM=null; alert('取込完了：工種 追加'+added+' / 更新'+updated+(makeCust?' ／ 顧客・物件・概算を作成':''));
+  state.view='workitems'; render();
 }
 
 /* ---- equipment ---- */
