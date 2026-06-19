@@ -566,6 +566,7 @@ function vWorkItems(){
   const blocks=majors.map(m=>`<div class="card" style="margin-bottom:12px">${node(m,0)}</div>`).join('');
   const actions=`<button class="btn gh sm" onclick="wiCollapseAll(1)">すべて閉じる</button>
     <button class="btn gh sm" onclick="wiCollapseAll(0)">すべて開く</button>
+    <button class="btn gh sm" onclick="wiBulkBase()">掛ける相手を一括設定</button>
     <button class="btn gh sm" onclick="wiBulkMarkup()">掛け率を一括設定</button>
     <button class="btn pri" onclick="wiAddMajor()">＋ 大項目を追加</button>`;
   return head('工事項目マスター','大項目 → 中項目 → 小項目①②③ の5階層。末端に「業者単価 × 掛け率」で売価を設定。▶▼で開閉、▲▼で並び替え、編集の「所属（移動先）」で中項目⇄小項目も移動できます。',actions)
@@ -608,6 +609,34 @@ function wiBulkMarkupApply(){
     w.markup=mk; w.updated_at=todayISO(); n++;
   });
   save(); closeModal(); render(); alert(n+' 件の工種に掛け率 '+mk+' を反映しました。');
+}
+function wiBulkBase(){
+  const bs=(a,b)=>(a.sort||0)-(b.sort||0);
+  const majors=DB.workItems.filter(w=>w.level===1).sort(bs);
+  const opts=`<option value="all">全体（すべての工種）</option>`+majors.map(m=>{
+    const mids=DB.workItems.filter(w=>w.level===2&&w.parent_id===m.id).sort(bs);
+    return `<option value="maj:${m.id}">大項目: ${esc(m.name)}</option>`+mids.map(mid=>`<option value="mid:${mid.id}">　中項目: ${esc(m.name)} ＞ ${esc(mid.name)}</option>`).join('');
+  }).join('');
+  const baseOpts=`<option value="auto">単位から自動判定（㎡→延床／坪→延床坪／式→一式／他→手入力）</option>`+DB.bases.map(b=>`<option value="${b.id}">${esc(b.name)}</option>`).join('');
+  modal('掛ける相手を一括設定',
+   `<p class="mut" style="font-size:12px;margin:0 0 10px">指定範囲の<b>末端（工種）すべて</b>の「掛ける相手（数量の元）」をまとめて設定します。設定すると概算の金額に反映されます。</p>
+    <label class="f"><span>対象範囲</span><select id="bb_scope">${opts}</select></label>
+    <label class="f" style="margin-top:12px"><span>掛ける相手</span><select id="bb_base">${baseOpts}</select></label>
+    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px"><button class="btn gh" onclick="closeModal()">キャンセル</button><button class="btn pri" onclick="wiBulkBaseApply()">一括反映</button></div>`);
+}
+function wiBulkBaseApply(){
+  const scope=document.getElementById('bb_scope').value;
+  const bv=document.getElementById('bb_base').value;
+  const desc=id=>{const set=new Set([id]);let ch=true;while(ch){ch=false;DB.workItems.forEach(w=>{if(w.parent_id!=null&&set.has(w.parent_id)&&!set.has(w.id)){set.add(w.id);ch=true;}});}return set;};
+  let target; if(scope==='all')target=null; else {const parts=scope.split(':');target=desc(+parts[1]);}
+  let n=0;
+  DB.workItems.forEach(w=>{
+    const leaf=!DB.workItems.some(c=>c.parent_id===w.id);
+    if(!leaf)return; if(target&&!target.has(w.id))return;
+    w.base_id = bv==='auto' ? unitToBaseId(w.unit) : +bv;
+    w.updated_at=todayISO(); n++;
+  });
+  save(); closeModal(); render(); alert(n+' 件の工種に掛ける相手を設定しました。');
 }
 function wiAddMajor(){ wiForm('add',0,1,null); }
 function wiAddChild(pid){ const p=DB.workItems.find(x=>x.id===pid); wiForm('add',0,Math.min(5,(p?p.level:0)+1),pid); }
@@ -738,6 +767,7 @@ function impGuess(){
     else IMP.map[i]='無視';
   });
 }
+function impDelRow(i){ IMP.rows.splice(i,1); render(); }
 function vImport(){
   const parents=DB.workItems.filter(w=>w.level<=4).sort((a,b)=>(a.sort||0)-(b.sort||0));
   if((IMP.parent==null||!parents.some(p=>p.id===IMP.parent)) && parents[0]) IMP.parent=parents[0].id;
@@ -749,12 +779,13 @@ function vImport(){
     const cols=Math.max(...IMP.rows.map(r=>r.length));
     const roles=['無視','工種名','単位','業者単価','数量','金額','掛け率'];
     const sel=i=>`<select onchange="IMP.map[${i}]=this.value">${roles.map(o=>`<option ${IMP.map[i]===o?'selected':''}>${o}</option>`).join('')}</select>`;
-    preview=`<div class="card" style="margin-top:14px"><div class="ct">プレビュー（${IMP.rows.length}行）— 各列の意味を選んでください</div>
-      <div class="scroll"><table><thead><tr>${Array.from({length:cols}).map((_,i)=>`<th>${sel(i)}</th>`).join('')}</tr></thead>
-      <tbody>${IMP.rows.slice(0,40).map(r=>`<tr>${Array.from({length:cols}).map((_,i)=>`<td>${esc(r[i]||'')}</td>`).join('')}</tr>`).join('')}</tbody></table></div>
+    preview=`<div class="card" style="margin-top:14px"><div class="ct">プレビュー（${IMP.rows.length}行）— 各列の意味を選び、不要な行は × で削除</div>
+      <div class="scroll"><table><thead><tr><th></th>${Array.from({length:cols}).map((_,i)=>`<th>${sel(i)}</th>`).join('')}</tr></thead>
+      <tbody>${IMP.rows.slice(0,80).map((r,ri)=>`<tr><td class="c"><span class="lnk red" title="この行を削除" onclick="impDelRow(${ri})">×</span></td>${Array.from({length:cols}).map((_,i)=>`<td>${esc(r[i]||'')}</td>`).join('')}</tr>`).join('')}</tbody></table></div>
+      ${IMP.rows.length>80?`<div class="mut" style="font-size:11px;padding:4px 14px">※ 先頭80行を表示（取込は全${IMP.rows.length}行）</div>`:''}
       <div class="pad">
         <div class="grid" style="grid-template-columns:1fr 1fr">
-          <label class="f"><span>掛ける相手（既定）</span><select id="imp_base"><option value="">（なし）</option>${baseOpts}</select></label>
+          <label class="f"><span>掛ける相手（空欄なら単位から自動判定）</span><select id="imp_base"><option value="">（自動判定：㎡→延床／坪→延床坪／式→一式／他→手入力）</option>${baseOpts}</select></label>
           <label class="f"><span>掛け率（列が無い時の既定）</span><input id="imp_markup" type="number" step="0.01" value="1.2"></label>
         </div>
         <label class="f" style="margin-top:10px"><span>取込モード</span><select id="imp_mode"><option value="add">新規追加（工種を作成）</option><option value="update">単価更新（工種名が一致する末端の業者単価を更新）</option></select></label>
@@ -845,7 +876,7 @@ async function impPDF(input){
         if(!cols)return;
         const r=pdfAssignRow(line,cols);
         const nm=r.name.replace(/[（(].*?[）)]/g,'').trim();
-        if(!nm||PDF_SKIP.test(nm))return;
+        if(!nm||PDF_SKIP.test(nm)||/^【.*】$/.test(nm)||/^[【［\[].*$/.test(nm)&&!r.price&&!r.qty)return;
         if(!(r.qty||r.price||r.amount))return;
         out.push([nm, r.unit, r.qty||'', r.price||'', r.amount||'']);
       });
@@ -876,17 +907,27 @@ function impRun(){
     if(!vendor && qty>0 && amount>0) vendor=Math.round(amount/qty); // 単価が無ければ 金額÷数量 で算出
     const unit=cUnit>=0?(r[cUnit]||''):'';
     const markup=cMarkup>=0?(numOf(r[cMarkup])||defMarkup):defMarkup;
+    const baseId = defBase || unitToBaseId(unit); // 既定が無ければ単位から自動判定
     const refNote=(qty>0||amount>0)?`取込時 数量${qty||'-'} / 金額${amount? yen(amount):'-'}`:'';
     if(mode==='update'){
       const ex=DB.workItems.find(w=>w.name===name && isLeaf(w));
-      if(ex){ if((ex.vendor_price||0)!==vendor){DB.priceHistory.push({id:uid(),work_item_id:ex.id,name:ex.name,old_price:ex.vendor_price||0,new_price:vendor,old_cost:ex.vendor_price||0,new_cost:vendor,reason:'取込更新',changed_at:todayISO()});} ex.vendor_price=vendor; if(cUnit>=0)ex.unit=unit; if(cMarkup>=0)ex.markup=markup; if(refNote)ex.note=refNote; ex.updated_at=todayISO(); updated++; }
+      if(ex){ if((ex.vendor_price||0)!==vendor){DB.priceHistory.push({id:uid(),work_item_id:ex.id,name:ex.name,old_price:ex.vendor_price||0,new_price:vendor,old_cost:ex.vendor_price||0,new_cost:vendor,reason:'取込更新',changed_at:todayISO()});} ex.vendor_price=vendor; if(cUnit>=0)ex.unit=unit; if(cMarkup>=0)ex.markup=markup; if(!ex.base_id)ex.base_id=baseId; if(refNote)ex.note=refNote; ex.updated_at=todayISO(); updated++; }
     } else {
-      DB.workItems.push({id:uid(),parent_id:parentId,level:childLevel,name,unit,base_id:defBase,vendor_price:vendor,markup,sort:nextSort(childLevel,parentId),note:refNote,updated_at:todayISO()});
+      DB.workItems.push({id:uid(),parent_id:parentId,level:childLevel,name,unit,base_id:baseId,vendor_price:vendor,markup,sort:nextSort(childLevel,parentId),note:refNote,updated_at:todayISO()});
       added++;
     }
   });
   save(); IMP.rows=[]; alert('取込完了：追加 '+added+' 件 / 更新 '+updated+' 件（取込先: '+parent.name+'）');
   state.view='workitems'; render();
+}
+// 単位 → 掛ける相手(base) の自動判定
+function baseIdBySource(src){ const b=DB.bases.find(x=>x.source===src&&x.builtin)||DB.bases.find(x=>x.source===src); return b?b.id:''; }
+function unitToBaseId(unit){
+  const u=String(unit||'').replace(/\s/g,'');
+  if(/(㎡|m2|ｍ2|平米|平方)/.test(u)) return baseIdBySource('floor_area');
+  if(/坪/.test(u)) return baseIdBySource('floor_tsubo');
+  if(u===''||/^(式|一式)$/.test(u)) return baseIdBySource('fixed1');
+  return baseIdBySource('manual'); // 本/個/箇所/ｍ/㎥/台/回/車/人工/日 等は手入力数量
 }
 
 /* ---- equipment ---- */
