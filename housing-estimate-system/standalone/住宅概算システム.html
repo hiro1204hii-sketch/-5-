@@ -784,9 +784,10 @@ function vImport(){
       <tbody>${IMP.rows.slice(0,80).map((r,ri)=>`<tr><td class="c"><span class="lnk red" title="この行を削除" onclick="impDelRow(${ri})">×</span></td>${Array.from({length:cols}).map((_,i)=>`<td>${esc(r[i]||'')}</td>`).join('')}</tr>`).join('')}</tbody></table></div>
       ${IMP.rows.length>80?`<div class="mut" style="font-size:11px;padding:4px 14px">※ 先頭80行を表示（取込は全${IMP.rows.length}行）</div>`:''}
       <div class="pad">
-        <div class="grid" style="grid-template-columns:1fr 1fr">
+        <div class="grid" style="grid-template-columns:1fr 1fr 1fr">
+          <label class="f"><span>取り込む単価は</span><select id="imp_pricetype"><option value="cost">原価（業者単価）そのまま</option><option value="sale">売価（お客様単価）→掛け率で原価に割戻す</option></select></label>
           <label class="f"><span>掛ける相手（空欄なら単位から自動判定）</span><select id="imp_base"><option value="">（自動判定：㎡→延床／坪→延床坪／式→一式／他→手入力）</option>${baseOpts}</select></label>
-          <label class="f"><span>掛け率（列が無い時の既定）</span><input id="imp_markup" type="number" step="0.01" value="1.2"></label>
+          <label class="f"><span>掛け率（売価割戻し／既定）</span><input id="imp_markup" type="number" step="0.01" value="1.2"></label>
         </div>
         <label class="f" style="margin-top:10px"><span>取込モード</span><select id="imp_mode"><option value="add">新規追加（工種を作成）</option><option value="update">単価更新（工種名が一致する末端の業者単価を更新）</option></select></label>
         <div style="margin-top:12px"><button class="btn pri" onclick="impRun()">取込先「${esc(tgt?tgt.name:'')}」に取り込む</button> <button class="btn gh" onclick="IMP.rows=[];render()">クリア</button></div>
@@ -900,13 +901,15 @@ function impRun(){
   const numOf=v=>+String(v||'').replace(/[^0-9.\-]/g,'')||0;
   const HEAD=['工種名','名称','工種','項目','品名','名前'];
   let added=0,updated=0;
+  const pType=(document.getElementById('imp_pricetype')||{}).value||'cost';
   IMP.rows.forEach(r=>{
     const name=(r[cName]||'').trim(); if(!name||HEAD.includes(name))return;
-    let vendor=cVendor>=0?Math.round(numOf(r[cVendor])):0;
+    let priceVal=cVendor>=0?numOf(r[cVendor]):0;
     const qty=cQty>=0?numOf(r[cQty]):0, amount=cAmount>=0?numOf(r[cAmount]):0;
-    if(!vendor && qty>0 && amount>0) vendor=Math.round(amount/qty); // 単価が無ければ 金額÷数量 で算出
+    if(!priceVal && qty>0 && amount>0) priceVal=amount/qty; // 単価が無ければ 金額÷数量
     const unit=cUnit>=0?(r[cUnit]||''):'';
     const markup=cMarkup>=0?(numOf(r[cMarkup])||defMarkup):defMarkup;
+    const vendor = pType==='sale' ? Math.round(priceVal/(markup||1)) : Math.round(priceVal); // 売価なら掛け率で原価へ割戻し
     const baseId = defBase || unitToBaseId(unit); // 既定が無ければ単位から自動判定
     const refNote=(qty>0||amount>0)?`取込時 数量${qty||'-'} / 金額${amount? yen(amount):'-'}`:'';
     if(mode==='update'){
@@ -1053,15 +1056,20 @@ function vEstimateNew(){
   return head('概算見積作成','物件と標準仕様を選び、住設・オプションを調整。工事項目は自動算出され、標準仕様との差額が即時表示されます。')+
     `<div class="grid" style="grid-template-columns:minmax(320px,2fr) 3fr;align-items:start">${form}<div id="ec-result"></div></div>`;
 }
+function estSummary(t){
+  return `<div class="card" style="background:#0f172a;border:0;margin-bottom:16px;overflow:hidden"><div style="display:grid;grid-template-columns:repeat(4,1fr)">
+    <div style="padding:14px 16px"><div style="font-size:11px;color:#94a3b8">お客様見積金額（売価）</div><div style="font-size:23px;font-weight:800;color:#fff">${yen(t.total_sale)}</div></div>
+    <div style="padding:14px 16px;border-left:1px solid #1e293b"><div style="font-size:11px;color:#94a3b8">原価合計</div><div style="font-size:23px;font-weight:800;color:#e2e8f0">${yen(t.total_cost)}</div></div>
+    <div style="padding:14px 16px;border-left:1px solid #1e293b"><div style="font-size:11px;color:#94a3b8">利益額</div><div style="font-size:23px;font-weight:800;color:#34d399">${yen(t.gross_profit)}</div></div>
+    <div style="padding:14px 16px;border-left:1px solid #1e293b"><div style="font-size:11px;color:#94a3b8">粗利率</div><div style="font-size:23px;font-weight:800;color:#34d399">${t.gross_margin}%</div></div>
+  </div></div>`;
+}
 function ecResultHTML(){
   const s=state.ecState; const d=buildBreakdown(s);
   if(!d)return '<div class="card"><div class="empty">物件を選択してください</div></div>';
   const t=d.totals;
-  return `<div class="grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:16px">
-    <div class="stat"><div class="k">概算売価</div><div class="v" style="font-size:22px;color:var(--brand-d)">${yen(t.total_sale)}</div></div>
-    <div class="stat"><div class="k">概算原価</div><div class="v" style="font-size:22px">${yen(t.total_cost)}</div></div>
-    <div class="stat"><div class="k">粗利 (${t.gross_margin}%)</div><div class="v" style="font-size:22px;color:var(--ok)">${yen(t.gross_profit)}</div></div></div>
-   <div class="card" style="margin-bottom:16px"><div class="ct">標準仕様との差額</div>
+  return estSummary(t)
+   +`<div class="card" style="margin-bottom:16px"><div class="ct">標準仕様との差額</div>
     <table><thead><tr><th>カテゴリ</th><th>標準 → 選択</th><th class="r">標準</th><th class="r">ｵﾌﾟｼｮﾝ</th><th class="r">差額</th></tr></thead><tbody>
     ${d.equipmentLines.map(e=>`<tr><td><span class="badge b-gray">${e.category}</span></td><td style="font-size:12px">${esc(e.standard_equipment_name)} → <b>${esc(e.equipment_name)}</b></td>
       <td class="r mut">${yen(e.standard_price)}</td><td class="r mut">${e.option_total?yens(e.option_total):'—'}</td>
@@ -1073,6 +1081,7 @@ function ecResultHTML(){
       <td class="mut" style="font-size:12px">${esc(w.base_name)}</td>
       <td class="r">${num(w.quantity)}<span class="mut" style="font-size:11px">${esc(w.unit)}</span></td>
       <td class="r mut">${yen(w.vendor_price)}</td><td class="r mut">${w.markup}</td><td class="r mut">${yen(w.unit_sale)}</td><td class="r"><b>${yen(w.amount)}</b></td></tr>`).join('')}</tbody></table></div></div>
+   ${estSummary(t)}
    <div class="card"><div class="pad" style="display:flex;gap:10px;align-items:center">
      <input placeholder="概算見積の名称（任意）" value="${esc(s.name)}" oninput="state.ecState.name=this.value" style="flex:1">
      <button class="btn pri" onclick="ecSave()">この概算を保存</button></div></div>`;
@@ -1114,12 +1123,10 @@ function estDel(id){if(confirm('削除しますか？')){DB.estimates=DB.estimat
 function vEstimateDetail(){
   const e=DB.estimates.find(x=>x.id===state.detailId); if(!e)return '<div class="empty">見つかりません</div>';
   const dt=e.equipmentLines.reduce((s,x)=>s+x.diff,0);
+  const et={total_sale:e.total_sale,total_cost:e.total_cost,gross_profit:e.total_sale-e.total_cost,gross_margin:e.total_sale>0?Math.round((e.total_sale-e.total_cost)/e.total_sale*1000)/10:0};
   return head(e.name,`物件: ${e.property_name} ／ 延床 ${e.total_floor_area}㎡`,`<button class="btn gh" onclick="go('estimates')">一覧へ戻る</button>`)+
-   `<div class="grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:16px">
-     <div class="stat"><div class="k">概算売価</div><div class="v" style="font-size:22px;color:var(--brand-d)">${yen(e.total_sale)}</div></div>
-     <div class="stat"><div class="k">概算原価</div><div class="v" style="font-size:22px">${yen(e.total_cost)}</div></div>
-     <div class="stat"><div class="k">粗利</div><div class="v" style="font-size:22px;color:var(--ok)">${yen(e.total_sale-e.total_cost)}</div></div></div>
-    <div class="card" style="margin-bottom:16px"><div class="ct">標準仕様との差額</div>
+   estSummary(et)
+   +`<div class="card" style="margin-bottom:16px"><div class="ct">標準仕様との差額</div>
      <table><thead><tr><th>カテゴリ</th><th>選択住設</th><th class="r">標準</th><th class="r">選択</th><th class="r">ｵﾌﾟｼｮﾝ</th><th class="r">差額</th></tr></thead><tbody>
      ${e.equipmentLines.map(x=>`<tr><td><span class="badge b-gray">${x.category}</span></td><td><b>${esc(x.equipment_name)}</b></td><td class="r mut">${yen(x.standard_price)}</td><td class="r">${yen(x.selected_price)}</td><td class="r mut">${x.option_total?yens(x.option_total):'—'}</td><td class="r" style="font-weight:700;color:${x.diff>0?'var(--red)':x.diff<0?'var(--ok)':'var(--muted)'}">${x.diff===0?'±0':yens(x.diff)}</td></tr>`).join('')}
      </tbody><tfoot><tr><td colspan="5">差額合計</td><td class="r" style="color:${dt>=0?'var(--red)':'var(--ok)'}">${yens(dt)}</td></tr></tfoot></table></div>
