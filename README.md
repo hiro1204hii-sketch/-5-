@@ -7,6 +7,7 @@
 |---|---|---|---|
 | [`housing-estimate-system/`](./housing-estimate-system) | 住宅概算・原価管理システム | 工務店向け概算見積システム（Phase1 MVP）。概算精度の継続的向上を目的に、単価履歴・標準仕様差額・過去見積を蓄積。 | React + TypeScript + Tailwind / Node + Express / SQLite |
 | [`sodateru-eigyo-techo/`](./sodateru-eigyo-techo) | 育てる営業手帳 | 商談録音 → AI分析Webアプリ（SPA）＋モバイルアプリ（React Native）。顧客管理・パイプライン・AIコーチ機能付き。 | HTML/CSS/JS (ゼロ依存) / React Native (Expo) |
+| [`jusetsu-search/`](./jusetsu-search) | 住設サーチ | 住宅設備機器に特化した検索・比較サイトの設計ドキュメント一式（サイトマップ/DB設計/画面/ワイヤーフレーム/API/ロードマップ）。建材サーチ参考。 | 設計（Next.js + NestJS/Express + PostgreSQL 想定） |
 
 ## 各プロジェクトの始め方
 
