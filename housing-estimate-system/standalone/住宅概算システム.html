@@ -949,22 +949,26 @@ function kmParse(text){
   const hi=rows.findIndex(r=>r[0]==='階層'&&r.includes('名称')&&r.includes('見積単価'));
   if(hi<0)return null;
   const H=rows[hi], ci=n=>H.indexOf(n);
-  const C={lv:ci('階層'),dai:ci('大'),chu:ci('中'),no:ci('№'),kbn:ci('区分'),name:ci('名称'),spec:ci('規格・寸法'),unit:ci('単位'),qty:ci('見積数量'),price:ci('見積単価'),amt:ci('見積金額')};
+  const C={lv:ci('階層'),dai:ci('大'),chu:ci('中'),s1:ci('小①'),s2:ci('小②'),s3:ci('小③'),no:ci('№'),kbn:ci('区分'),name:ci('名称'),spec:ci('規格・寸法'),unit:ci('単位'),qty:ci('見積数量'),price:ci('見積単価'),amt:ci('見積金額')};
   const L=rows[0]||[], V=rows[1]||[], meta={}; L.forEach((k,i)=>{ if(k&&meta[k]==null)meta[k]=V[i]; });
   let tsubo=0; rows.forEach(r=>{const m=(r||[]).join(' ').match(/施工面積\s*([0-9]+\.?[0-9]*)\s*坪/);if(m&&!tsubo)tsubo=+m[1];});
   const info={customer:(meta['施主名称①']||'').trim(),project:(meta['工事名称①']||'').trim(),place:(V[12]||'').trim(),total:+(meta['見積合計金額']||0)||0,totalNoTax:+(meta['見積税抜き額']||0)||0,tsubo};
-  const koji={};
-  for(let i=hi+1;i<rows.length;i++){const r=rows[i];if(r[C.lv]==='1'&&r[C.dai]==='1'&&r[C.kbn]==='0'&&(r[C.name]||'').trim())koji[r[C.no]]=r[C.name].trim();}
+  // 階層列(階層,大,中,小①②③,№)から汎用的にツリーを復元。各工種の親を大項目とする。
+  const val=(r,c)=>c>=0?(r[c]||'0'):'0';
+  const idx=r=>[val(r,C.dai),val(r,C.chu),val(r,C.s1),val(r,C.s2),val(r,C.s3)];
+  const addrOf=r=>{const d=+r[C.lv]||0;return d===0?String(r[C.no]):idx(r).slice(0,d).join('.')+'.'+r[C.no];};
+  const parentAddrOf=r=>{const d=+r[C.lv]||0;return d===0?null:idx(r).slice(0,d).join('.');};
+  const nodeName={},hasChild={};
+  for(let i=hi+1;i<rows.length;i++){const r=rows[i];if(r[C.kbn]!=='0')continue;const nm=(r[C.name]||'').trim();if(nm)nodeName[addrOf(r)]=nm;const pa=parentAddrOf(r);if(pa!=null)hasChild[pa]=true;}
   const tree=[],byMajor={};let last=null;
-  for(let i=hi+1;i<rows.length;i++){const r=rows[i];
-    if(r[C.kbn]!=='0')continue;
-    if(r[C.lv]==='2'&&r[C.dai]==='1'){
-      const mn=koji[r[C.chu]]||('工事'+r[C.chu]);
-      const name=(r[C.name]||'').trim();
-      if(name===''){ if(last)last.spec=((last.spec||'')+' '+(r[C.spec]||'')).trim(); continue; }
-      let M=byMajor[mn]; if(!M){M={major:mn,items:[]};byMajor[mn]=M;tree.push(M);}
-      M.items.push(last={name,spec:(r[C.spec]||'').trim(),unit:(r[C.unit]||'').trim(),qty:+r[C.qty]||0,price:+r[C.price]||0,amt:+r[C.amt]||0});
-    }
+  for(let i=hi+1;i<rows.length;i++){const r=rows[i];if(r[C.kbn]!=='0')continue;
+    const nm=(r[C.name]||'').trim();
+    if(nm===''){ if(last)last.spec=((last.spec||'')+' '+(r[C.spec]||'')).trim(); continue; }
+    if(hasChild[addrOf(r)])continue; // 子を持つ=見出し（工種ではない）
+    const price=+r[C.price]||0, amt=+r[C.amt]||0; if(!price&&!amt)continue;
+    const pa=parentAddrOf(r); const major=(pa!=null&&nodeName[pa])?nodeName[pa]:nm;
+    let M=byMajor[major]; if(!M){M={major,items:[]};byMajor[major]=M;tree.push(M);}
+    M.items.push(last={name:nm,unit:(r[C.unit]||'').trim(),qty:+r[C.qty]||0,price,amt,spec:(r[C.spec]||'').trim()});
   }
   return {info,tree};
 }
